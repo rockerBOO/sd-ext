@@ -4,3 +4,4 @@ diffusers==0.23.1
 numpy==1.26.2
 safetensors==0.4.0
 transformers==4.35.2
+-e git+https://github.com/kohya-ss/sd-scripts.git#egg=library

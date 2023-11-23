@@ -7,13 +7,24 @@ from collections import defaultdict
 from pathlib import Path
 
 import cv2 as cv
-import library.model_util as model_util
-import library.sdxl_train_util as sdxl_train_util
 import numpy as np
 import torch
 import tqdm
 from PIL import Image, features
 from torchvision import transforms
+
+try:
+    import library.model_util as model_util
+    import library.sdxl_train_util as sdxl_train_util
+except ModuleNotFoundError:
+    print(
+        "Requires to be with the Kohya-ss sd-scripts"
+        + "https://github.com/kohya-ss/sd-scripts"
+    )
+    print("Copy this script into your Kohya-ss sd-scripts directory")
+    import sys
+
+    sys.exit(2)
 
 IMAGE_TRANSFORMS = transforms.Compose(
     [

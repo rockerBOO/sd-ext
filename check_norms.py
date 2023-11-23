@@ -3,7 +3,14 @@ import argparse
 import torch
 from safetensors.torch import load_file, safe_open
 
-from library import model_util
+try:
+    from library import model_util
+except ModuleNotFoundError:
+    print("Requires to be with the Kohya-ss sd-scripts https://github.com/kohya-ss/sd-scripts")
+    print("Copy this script into your Kohya-ss sd-scripts directory")
+    import sys
+
+    sys.exit(2)
 
 
 def load_state_dict(file_name, dtype):
@@ -89,7 +96,9 @@ def main(args):
 
     lora_sd, metadata = load_state_dict(args.model, torch.float32)
 
-    pre_norms, post_norms, keys_scaled, longest_key = get_norms(lora_sd, args.max_norm, device)
+    pre_norms, post_norms, keys_scaled, longest_key = get_norms(
+        lora_sd, args.max_norm, device
+    )
 
     def average(norms):
         total = 0
@@ -110,7 +119,9 @@ def main(args):
     print(f"Tensor norm average:                       {average(pre_norms)}")
 
     if args.max_norm is not None:
-        print(f"Scaled by max normalization ({args.max_norm}) average: {average(post_norms)}")
+        print(
+            f"Scaled by max normalization ({args.max_norm}) average: {average(post_norms)}"
+        )
         print(f"Keys scaled: {keys_scaled}")
 
 
@@ -129,7 +140,6 @@ if __name__ == "__main__":
         default=None,
         help="Calculate scaled norms using max normalization",
     )
-
 
     args = argparser.parse_args()
     main(args)
