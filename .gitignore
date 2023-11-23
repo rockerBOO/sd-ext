@@ -1,1 +1,5 @@
 *.sh
+
+.env
+.venv/
+venv/
