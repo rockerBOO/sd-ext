@@ -17,10 +17,12 @@ Script's I use with Stable Diffusion
 - clip_iqa.py
 - clip_score.py
 - fid.py
+- check_norms.py
+- debug_vae_from_images.py
+- read-metadata.py
 
 ## Pruning
 
-- check_norms.py
 - scale_norms.py
 - drop_keys.py
 
