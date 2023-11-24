@@ -193,6 +193,10 @@ def main(args):
                 fakes.append((fake_ds, fake_dataloader, lora_file))
 
     for fake_ds, fake_dataloader, lora_file in fakes:
+        if fake_ds is None:
+            print("Could not find fake dataset... continuing")
+            continue
+
         print(f"Real: {len(real_ds)} batches: {len(real_dataloader)}")
         print(f"Fake: {len(fake_ds)} batches: {len(fake_dataloader)}")
 
