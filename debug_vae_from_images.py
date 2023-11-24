@@ -7,24 +7,26 @@ from collections import defaultdict
 from pathlib import Path
 
 import cv2 as cv
-import numpy as np
-import torch
-import tqdm
-from PIL import Image, features
-from torchvision import transforms
 
 try:
     import library.model_util as model_util
+    import library.train_util as train_util
     import library.sdxl_train_util as sdxl_train_util
 except ModuleNotFoundError:
     print(
         "Requires to be with the Kohya-ss sd-scripts"
-        + "https://github.com/kohya-ss/sd-scripts"
+        + " https://github.com/kohya-ss/sd-scripts"
     )
     print("Copy this script into your Kohya-ss sd-scripts directory")
     import sys
 
     sys.exit(2)
+
+import numpy as np
+import torch
+import tqdm
+from PIL import Image, features
+from torchvision import transforms
 
 IMAGE_TRANSFORMS = transforms.Compose(
     [
@@ -115,7 +117,7 @@ def process_latents_from_images(vae, input_file_or_dir, output_dir, args):
                     vae_name=vae_name,
                     apng=args.apng,
                     webp=args.webp,
-                    mp4=True,
+                    mp4=False,
                 )
 
             progress_bar.update(1)
@@ -285,12 +287,16 @@ def consistencydecoder_and_save(
 def main(args):
     device = torch.device(args.device)
 
+    # Convert blank VAE into None for compatibility
+    if args.vae == "":
+        args.vae = None
+
     if args.vae is None:
+        from accelerate import Accelerator
+
+        accelerator = Accelerator()
         if args.sdxl:
             # putting this in here just to be able to pass the argument
-            from accelerate import Accelerator
-
-            accelerator = Accelerator()
 
             _, _, _, vae, _, _, _ = sdxl_train_util.load_target_model(
                 args,
@@ -300,9 +306,8 @@ def main(args):
             )
         else:
             # Load model's VAE
-            _, vae, _ = model_util.load_models_from_stable_diffusion_checkpoint(
-                args.v2,
-                args.pretrained_model_name_or_path,
+            _, vae, _, _ = train_util.load_target_model(
+                args, torch.float16, accelerator
             )
             vae.to(device, dtype=torch.float32)
     else:
@@ -322,7 +327,10 @@ if __name__ == "__main__":
         "--output_dir", help="Output directory to put the VAE decoded images"
     )
     argparser.add_argument(
-        "--vae", default="", help="Path to VAE file or hugging face VAE path"
+        "--vae",
+        type=str,
+        default=None,
+        help="path to checkpoint of vae to replace / VAEを入れ替える場合、VAEのcheckpointファイルまたはディレクトリ",
     )
     argparser.add_argument(
         "--pretrained_model_name_or_path",
