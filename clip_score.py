@@ -1,17 +1,24 @@
-from torchmetrics.multimodal.clip_score import CLIPScore
-import torch
-from datasets import load_dataset
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
-from accelerate import Accelerator
+import argparse
+import csv
 import random
 from pathlib import Path
-import argparse
+
 import numpy
+import torch
+from accelerate import Accelerator
+from accelerate.utils import set_seed
+from datasets import load_dataset
+from diffusers import (
+    DPMSolverMultistepScheduler,
+    StableDiffusionPipeline,
+    AutoencoderKL,
+)
 from diffusers.models.attention_processor import AttnProcessor2_0
+from torchmetrics.multimodal.clip_score import CLIPScore
 
 
 @torch.no_grad()
-def calculate_clip_score(all_prompts_images, accelerator, metric):
+def calculate_clip_score(all_prompts_images, accelerator, metric, score_writer):
     # batch_size = 5
     clip_scores = []
 
@@ -25,7 +32,8 @@ def calculate_clip_score(all_prompts_images, accelerator, metric):
 
             if len(latents.size()) == 3:
                 latents = latents.unsqueeze(0)
-            clip_scores.append(
+
+            score = (
                 metric(
                     latents.permute(0, 3, 1, 2).to(metric.device),
                     prompts,
@@ -33,6 +41,11 @@ def calculate_clip_score(all_prompts_images, accelerator, metric):
                 .detach()
                 .item()
             )
+
+            clip_scores.append(score)
+            if score_writer is not None:
+                # print(f"Saving score to score writer {score}")
+                score_writer.writerow(dict(clip_score=score, prompts=prompts))
 
     return numpy.sum(clip_scores) / len(clip_scores)
 
@@ -50,12 +63,22 @@ def setup_sd_pipeline(args):
         model_ckpt, subfolder="scheduler"
     )
 
+    pipeline_kwargs = {}
+
+    if args.vae is not None:
+        vae_path = Path(args.vae)
+        if vae_path.is_file():
+            pipeline_kwargs["vae"] = AutoencoderKL.from_single_file(vae_path)
+        else:
+            pipeline_kwargs["vae"] = AutoencoderKL.from_pretrained(args.vae)
+
     sd_pipeline = StableDiffusionPipeline.from_pretrained(
         model_ckpt,
         torch_dtype=torch.float16,
         safety_checker=None,
         use_safetensors=True,
         scheduler=scheduler,
+        **pipeline_kwargs,
     )
 
     if args.xformers:
@@ -87,8 +110,8 @@ def setup_sd_pipeline(args):
 @torch.no_grad()
 def main(args):
     seed = args.seed
-    torch.manual_seed(seed)
-    random.seed(seed)
+
+    set_seed(seed)
 
     device = torch.device(
         args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
@@ -111,14 +134,22 @@ def main(args):
             if lora_path.is_dir():
                 for lora_file in lora_path.iterdir():
                     clip_score = get_clip_score_from_lora(
-                        lora_file, sd_pipeline, accelerator, batch_size, seed, metric
+                        lora_file,
+                        sd_pipeline,
+                        accelerator,
+                        batch_size,
+                        seed,
+                        metric,
+                        args,
                     )
-                    clip_scores.append((clip_score, lora_file))
+                    if clip_score is not None:
+                        clip_scores.append((clip_score, lora_file))
             else:
                 clip_score = get_clip_score_from_lora(
-                    lora_path, sd_pipeline, accelerator, batch_size, seed, metric
+                    lora_path, sd_pipeline, accelerator, batch_size, seed, metric, args
                 )
-                clip_scores.append((clip_score, lora_path))
+                if clip_score is not None:
+                    clip_scores.append((clip_score, lora_path))
 
     print("---")
     print(f"CLIP Score for each LoRA ({len(clip_scores)})")
@@ -126,10 +157,27 @@ def main(args):
         print(f"CLIP score ({lora_file.name}): {clip_score}")
         # CLIP score: 35.7038
 
+    if args.output_clip_score is not None:
+        output = Path(args.output_clip_score)
+        csv_filename = output / "clip_scores.csv" if output.is_dir() else output
+        with open(csv_filename, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=["clip_score", "lora_file"])
+            writer.writeheader()
+
+            for clip_score, lora_file in clip_scores:
+                writer.writerow(dict(clip_score=clip_score, lora_file=lora_file))
+
+            print(f"Saved clip scores to {csv_filename.absolute()}")
+
 
 def get_clip_score_from_lora(
-    lora_file, sd_pipeline, accelerator, batch_size, seed, metric
+    lora_file, sd_pipeline, accelerator, batch_size, seed, metric, args
 ):
+    # only supporting safetensor files here
+    if lora_file.suffix != ".safetensors":
+        print(f"Skipping {lora_file.name} because not safetensors file")
+        return None
+
     sd_pipeline.unload_lora_weights()
     accelerator.clear()
     sd_pipeline.load_lora_weights(lora_file, weight_name=lora_file.name)
@@ -138,7 +186,31 @@ def get_clip_score_from_lora(
 
     accelerator.free_memory()
 
-    clip_score = calculate_clip_score(prompts_latents, accelerator, metric)
+    score_writer = None
+
+    if args.save_scores_from_generated:
+        save_scores_path = Path(args.output_clip_score)
+        if save_scores_path.is_file():
+            save_scores_path = save_scores_path.parent
+
+        save_scores_file = (
+            save_scores_path
+            / lora_file.with_name(f"{lora_file.stem}_clip_scores.csv").name
+        )
+        with open(save_scores_file, "w") as scores_file:
+            print(f"Generated score {scores_file} for {lora_file.name}")
+            score_writer = csv.DictWriter(
+                scores_file, fieldnames=["clip_score", "prompts"]
+            )
+            score_writer.writeheader()
+
+            clip_score = calculate_clip_score(
+                prompts_latents, accelerator, metric, score_writer
+            )
+    else:
+        clip_score = calculate_clip_score(
+            prompts_latents, accelerator, metric, score_writer
+        )
 
     metric.reset()
     print(f"CLIP score ({lora_file.name}): {clip_score}")
@@ -150,15 +222,15 @@ def get_clip_score_from_lora(
 def generate_latents(sd_pipeline, batch_size, seed):
     prompts = load_dataset("nateraw/parti-prompts", split="train")
     prompts = prompts.shuffle(seed=seed)
-    sample_prompts = [prompts[i]["Prompt"] for i in range(10)]
+    sample_prompts = [prompts[i]["Prompt"] for i in range(args.num_images_to_score)]
+
+    print("Prompts")
+    for sample_prompt in sample_prompts:
+        print(f"\t{sample_prompt}")
 
     prompts_images = []
     for i in range(len(sample_prompts) // batch_size):
         prompts = sample_prompts[i * batch_size : i * batch_size + batch_size]
-
-        print("Prompts")
-        for sample_prompt in sample_prompts:
-            print(f"\t{sample_prompt}")
 
         generated_images = sd_pipeline(
             prompts,
@@ -189,6 +261,25 @@ if __name__ == "__main__":
         type=int,
         default=1,
         help="Batch size of the image generation in Stable Diffusion",
+    )
+
+    argparser.add_argument(
+        "--num_images_to_score",
+        type=int,
+        default=25,
+        help="Number of images to score if generating from the model",
+    )
+    argparser.add_argument(
+        "--save_scores_from_generated",
+        action="store_true",
+        help="Save the score from generated images",
+    )
+
+    argparser.add_argument("--vae", help="VAE to apply to the generated images")
+
+    argparser.add_argument(
+        "--output_clip_score",
+        help="Output the CLIP score to this file or directory as clip_score.csv",
     )
 
     argparser.add_argument(
