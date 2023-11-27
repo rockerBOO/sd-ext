@@ -1,4 +1,4 @@
-# Copyright © 2023 Dave Lage
+# Copyright © 2023 Dave Lage (rockerBOO)
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 #
@@ -7,15 +7,16 @@
 # THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import csv
+import json
 import random
-
-import torch
-from datasets import load_dataset, Image
-
-from torchvision import transforms
+from collections import defaultdict
 from pathlib import Path
-import PIL
 
+import PIL
+import torch
+from datasets import Image, load_dataset
+from torchvision import transforms
 
 TRANSFORMS = transforms.Compose(
     [
@@ -65,6 +66,7 @@ def main(args):
         else:
             results.append(tuple(p))
     prompts = tuple(results)
+    print(f"Prompts: {prompts}")
 
     metric = CLIPImageQualityAssessment(prompts=prompts)
     metric.to(device)
@@ -85,13 +87,55 @@ def main(args):
 
     print(f"Images: {len(ds)} batches: {len(dataloader)}")
 
+    if args.output_scores is not None:
+        output_file = Path(args.output_scores)
+
+        csv_filename = (
+            output_file / "clip_iqa.csv" if output_file.is_dir() else output_file
+        )
+        with open(csv_filename, "w") as csv_file:
+            print(f"Saving CSV to {csv_filename.absolute()}")
+            score_writer = csv.DictWriter(
+                csv_file, fieldnames=["image_file", "prompt", "score"]
+            )
+            score_writer.writeheader()
+
+            scores = get_scores(dataloader, metric, device, score_writer)
+    else:
+        scores = get_scores(dataloader, metric, device, None)
+
+    average_scores = defaultdict()
+    for image_file, score_prompts in scores.items():
+        for prompt, score in score_prompts:
+            average_scores.setdefault(prompt, []).append(score)
+
+    print(f"Average CLIP IQA scores for {len(dataloader)} in {args.data_dir}")
+    for prompt, scores in average_scores.items():
+        print(f"{prompt:<20} {sum(scores) / len(scores)}")
+
+
+def get_scores(dataloader, metric, device, score_writer):
+    clip_iqa_scores = defaultdict()
     for i, images in enumerate(dataloader):
         for image in images:
             results = metric(torch.stack([TRANSFORMS(image["image"])]).to(device))
-
-            print(f"{Path(image['image_file']).name}")
+            scores = []
+            image_file = Path(image["image_file"])
+            # print(f"{image_file.name}")
             for key, value in results.items():
-                print(f"\t{f'{key}:':<10} {value.item():.3%}")
+                scores.append((key, value.detach().item()))
+                # print(f"\t{f'{key}:':<10} {value.item():.3%}")
+
+            clip_iqa_scores.setdefault(image_file.absolute(), []).extend(scores)
+
+    if score_writer is not None:
+        for image_file, scores in clip_iqa_scores.items():
+            for prompt, score in scores:
+                score_writer.writerow(
+                    dict(image_file=image_file, prompt=prompt, score=score)
+                )
+
+    return clip_iqa_scores
 
 
 if __name__ == "__main__":
@@ -129,7 +173,8 @@ if __name__ == "__main__":
                 beutiful: “Beautiful photo.” vs “Ugly photo.”
                 lonely: “Lonely photo.” vs “Sociable photo.”
                 relaxing: “Relaxing photo.” vs “Stressful photo.”
-    """, formatter_class=argparse.RawTextHelpFormatter
+    """,
+        formatter_class=argparse.RawTextHelpFormatter,
     )
 
     argparser.add_argument(
@@ -141,10 +186,12 @@ if __name__ == "__main__":
         help="Data dir",
     )
 
+    argparser.add_argument("--output_scores", help="Output scores to")
+
     argparser.add_argument(
         "--prompts",
         type=str,
-        required=True,
+        default="sharpness;brightness;quality;contrast;colorfullness;happy;beutiful",
         help="list of prompts separated by comma",
     )
 
