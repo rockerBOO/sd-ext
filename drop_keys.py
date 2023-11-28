@@ -64,12 +64,6 @@ def main(args):
 
     lora_sd, metadata = load_state_dict(args.model)
 
-    device = (
-        args.device
-        if args.device is not None
-        else ("cuda" if torch.cuda.is_available() else "cpu")
-    )
-
     keys = args.keys
 
     cleaned_lora_sd, dropped = drop_keys(lora_sd, keys)
@@ -78,31 +72,44 @@ def main(args):
         print(f"Dropped: {dropped_key}")
 
     print(f"Dropped keys: {len(dropped)}")
-    # print(f"Keys scaled: {keys_scaled}")
-    # print(f"Scaled max norm ({args.max_norm}) average: {normed}")
-    # print(f"Max norm: {max_norm}")
 
     save_to_file(output, cleaned_lora_sd, metadata)
 
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(
-        description="Check the norm values for the weights in a LoRA model"
+        description="""
+        Drop keys from the model using a string match.
+
+        python drop_keys.py /my/lora/file.safetensors --output /my/lora/file-dropped-to_v.safetensors --keys to_v ff_net
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_v.alpha
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_v.lora_down.weight
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_v.lora_up.weight
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_v.alpha
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_v.lora_down.weight
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_v.lora_up.weight
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_0_proj.alpha
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_0_proj.lora_down.weight
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_0_proj.lora_up.weight
+        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_2.alpha
+        ...
+        Dropped keys: 192
+        """,
+        formatter_class=argparse.RawTextHelpFormatter,
     )
 
     argparser.add_argument("model", help="LoRA model to check the norms of")
+
+    argparser.add_argument("--output", help="Output file to this file")
+
+    argparser.add_argument("--keys", nargs="+", help="Keys to drop")
 
     argparser.add_argument(
         "--overwrite",
         action="store_true",
         help="WARNING overwrites original file. "
-        + "Overwrite the model with scaled normed version",
+        + "Overwrite the model with dropped keys version",
     )
-
-    argparser.add_argument("--output", help="Output file to this file")
-
-    argparser.add_argument("--device", help="Device to run the calculations on")
-    argparser.add_argument("--keys", nargs="+", help="Keys to drop")
 
     args = argparser.parse_args()
     main(args)
