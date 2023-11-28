@@ -4,7 +4,17 @@ from pathlib import Path
 import torch
 from safetensors.torch import load_file, safe_open, save_file
 
-from library import model_util
+try:
+    from library import model_util
+except ModuleNotFoundError:
+    print(
+        "Requires to be with the Kohya-ss sd-scripts"
+        + "https://github.com/kohya-ss/sd-scripts"
+    )
+    print("Copy this script into your Kohya-ss sd-scripts directory")
+    import sys
+
+    sys.exit(2)
 
 
 def load_state_dict(file_name, dtype=None):

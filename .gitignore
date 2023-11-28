@@ -1,5 +1,9 @@
 *.sh
 
+.ignore
+
 .env
 .venv/
 venv/
+
+.ipynb_checkpoints/
