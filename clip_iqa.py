@@ -341,7 +341,7 @@ if __name__ == "__main__":
               Prompts as contrast with "positive" and "negative". 
               Positive and negative separated by `.` Eg: Good. Bad.
               Prompts separated by `;` quality;brightness;
-              Prompts input is a string so make sure to `"`quote`"` it.
+              Prompts input is a string so make sure to "quote" the prompt.
 
               See <https://torchmetrics.readthedocs.io/en/stable/multimodal/clip_iqa.html> 
                  for more details.

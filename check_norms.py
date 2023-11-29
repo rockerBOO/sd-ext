@@ -1,12 +1,16 @@
 import argparse
+from pathlib import Path
 
 import torch
 from safetensors.torch import load_file, safe_open
 
 try:
     from library import model_util
-except ModuleNotFoundError:
-    print("Requires to be with the Kohya-ss sd-scripts https://github.com/kohya-ss/sd-scripts")
+except ModuleNotFoundError as e:
+    print(e)
+    print(
+        "Requires to be with the Kohya-ss sd-scripts https://github.com/kohya-ss/sd-scripts"
+    )
     print("Copy this script into your Kohya-ss sd-scripts directory")
     import sys
 
@@ -87,6 +91,47 @@ def get_norms(state_dict, max_norm, device):
     return pre_norms, post_norms, keys_scaled, longest_key
 
 
+def process(model, device, args):
+    lora_sd, metadata = load_state_dict(model, torch.float32)
+
+    pre_norms, post_norms, keys_scaled, longest_key = get_norms(
+        lora_sd, args.max_norm, device
+    )
+
+    for i, norm in enumerate(pre_norms):
+        for k, v in norm.items():
+            if args.verbose:
+                if args.max_norm is not None:
+                    print(f"{k:<{longest_key}} {v:<19} {post_norms[i][k]}")
+                else:
+                    print(f"{k:<{longest_key}} {v}")
+
+    return pre_norms, post_norms, keys_scaled, longest_key
+
+
+def average(norms):
+    total = 0
+
+    for norm in norms:
+        for v in norm.values():
+            total += v
+
+    return total / len(norms)
+
+
+def get_models(models):
+    all_models = []
+    for model in models:
+        model_path = Path(model)
+        if model_path.is_dir():
+            all_models.extend(get_models([m for m in model_path.iterdir()]))
+        else:
+            if model_path.suffix == ".safetensors":
+                all_models.append(model_path)
+
+    return all_models
+
+
 def main(args):
     device = (
         args.device
@@ -94,35 +139,18 @@ def main(args):
         else ("cuda" if torch.cuda.is_available() else "cpu")
     )
 
-    lora_sd, metadata = load_state_dict(args.model, torch.float32)
+    print(args.models)
+    for model in get_models(args.models):
+        print(f"Model: {model}")
+        pre_norms, post_norms, keys_scaled, longest_key = process(model, device, args)
 
-    pre_norms, post_norms, keys_scaled, longest_key = get_norms(
-        lora_sd, args.max_norm, device
-    )
+        print(f"Tensor norm average:                       {average(pre_norms)}")
 
-    def average(norms):
-        total = 0
-
-        for norm in norms:
-            for v in norm.values():
-                total += v
-
-        return total / len(norms)
-
-    for i, norm in enumerate(pre_norms):
-        for k, v in norm.items():
-            if args.max_norm is not None:
-                print(f"{k:<{longest_key}} {v:<19} {post_norms[i][k]}")
-            else:
-                print(f"{k:<{longest_key}} {v}")
-
-    print(f"Tensor norm average:                       {average(pre_norms)}")
-
-    if args.max_norm is not None:
-        print(
-            f"Scaled by max normalization ({args.max_norm}) average: {average(post_norms)}"
-        )
-        print(f"Keys scaled: {keys_scaled}")
+        if args.max_norm is not None:
+            print(
+                f"Scaled by max normalization ({args.max_norm}) average: {average(post_norms)}"
+            )
+            print(f"Keys scaled: {keys_scaled}")
 
 
 if __name__ == "__main__":
@@ -130,7 +158,8 @@ if __name__ == "__main__":
         description="Check the norm values for the weights in a LoRA model"
     )
 
-    argparser.add_argument("model", help="LoRA model to check the norms of")
+    argparser.add_argument("models", nargs="+", help="LoRA model to check the norms of")
+    argparser.add_argument("--verbose", help="Output each norm value")
     argparser.add_argument(
         "--device", default=None, help="Device to run the calculations on"
     )
