@@ -67,9 +67,9 @@ def apply_max_norm(state_dict, max_norm_value, device):
                 .unsqueeze(3)
             )
         elif up.shape[2:] == (3, 3) or down.shape[2:] == (3, 3):
-            updown = torch.nn.functional.conv2d(down.permute(1, 0, 2, 3), up).permute(
-                1, 0, 2, 3
-            )
+            updown = torch.nn.functional.conv2d(
+                down.permute(1, 0, 2, 3), up
+            ).permute(1, 0, 2, 3)
         else:
             updown = up @ down
 
@@ -144,7 +144,9 @@ if __name__ == "__main__":
 
     argparser.add_argument("--output", help="Output file to this file")
 
-    argparser.add_argument("--device", help="Device to run the calculations on")
+    argparser.add_argument(
+        "--device", help="Device to run the calculations on"
+    )
 
     args = argparser.parse_args()
     main(args)

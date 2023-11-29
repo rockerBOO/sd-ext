@@ -139,7 +139,9 @@ def setup_sd_pipeline(args):
     return sd_pipeline
 
 
-def generate_dataset(sd_pipeline, prompts=None, accelerator=None, args=None, generator=None):
+def generate_dataset(
+    sd_pipeline, prompts=None, accelerator=None, args=None, generator=None
+):
     images = generate_images_from_loras(sd_pipeline, accelerator, args)
 
     if generator is None:
@@ -163,7 +165,9 @@ def score_dataset(dataloader, metric, device, args):
         output_file = Path(args.output_scores)
 
         csv_filename = (
-            output_file / "clip_iqa.csv" if output_file.is_dir() else output_file
+            output_file / "clip_iqa.csv"
+            if output_file.is_dir()
+            else output_file
         )
         with open(csv_filename, "w") as csv_file:
             print(f"Saving CSV to {csv_filename.absolute()}")
@@ -179,11 +183,7 @@ def score_dataset(dataloader, metric, device, args):
     return scores
 
 
-def generate_images_from_loras(
-    sd_pipeline,
-    prompts=None,
-    args=None
-):
+def generate_images_from_loras(sd_pipeline, prompts=None, args=None):
     if prompts is None:
         prompts = get_prompts(args)
 
@@ -191,7 +191,9 @@ def generate_images_from_loras(
     batch_size = args.batch_size
 
     device = torch.device(
-        args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+        args.device
+        if args.device
+        else ("cuda" if torch.cuda.is_available() else "cpu")
     )
 
     sd_pipeline = setup_sd_pipeline(args).to(device)
@@ -227,7 +229,9 @@ def generate_images_from_loras(
 
 def get_prompts(args):
     prompts = args.prompts.split(";")
-    prompts = [[r.strip() for r in p.strip().split(".") if r != ""] for p in prompts]
+    prompts = [
+        [r.strip() for r in p.strip().split(".") if r != ""] for p in prompts
+    ]
     results = []
 
     for p in prompts:
@@ -247,9 +251,9 @@ def load_dataset_from_dir(args, generator=None):
         generator = torch.Generator()
         generator.manual_seed(args.seed)
 
-    ds = load_dataset("imagefolder", data_dir=args.data_dir, split="train").cast_column(
-        "image", Image(decode=False)
-    )
+    ds = load_dataset(
+        "imagefolder", data_dir=args.data_dir, split="train"
+    ).cast_column("image", Image(decode=False))
 
     dataloader = torch.utils.data.DataLoader(
         ds,
@@ -268,7 +272,9 @@ def main(args):
     set_seed(seed)
 
     device = torch.device(
-        args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+        args.device
+        if args.device
+        else ("cuda" if torch.cuda.is_available() else "cpu")
     )
 
     metric = CLIPImageQualityAssessment(prompts=get_prompts(args))
@@ -297,7 +303,9 @@ def get_scores(dataloader, metric, device, score_writer):
     clip_iqa_scores = defaultdict()
     for i, images in enumerate(dataloader):
         for image in images:
-            results = metric(torch.stack([TRANSFORMS(image["image"])]).to(device))
+            results = metric(
+                torch.stack([TRANSFORMS(image["image"])]).to(device)
+            )
             scores = []
             image_file = Path(image["image_file"])
             # print(f"{image_file.name}")
@@ -305,7 +313,9 @@ def get_scores(dataloader, metric, device, score_writer):
                 scores.append((key, value.detach().item()))
                 # print(f"\t{f'{key}:':<10} {value.item():.3%}")
 
-            clip_iqa_scores.setdefault(image_file.absolute(), []).extend(scores)
+            clip_iqa_scores.setdefault(image_file.absolute(), []).extend(
+                scores
+            )
 
     if score_writer is not None:
         for image_file, scores in clip_iqa_scores.items():
@@ -446,9 +456,13 @@ if __name__ == "__main__":
         help="",
     )
 
-    argparser.add_argument("--vae", help="VAE to apply to the generated images")
+    argparser.add_argument(
+        "--vae", help="VAE to apply to the generated images"
+    )
 
-    argparser.add_argument("--xformers", action="store_true", help="Use XFormers")
+    argparser.add_argument(
+        "--xformers", action="store_true", help="Use XFormers"
+    )
 
     argparser.add_argument("--device", default=None, help="Set device to use")
 

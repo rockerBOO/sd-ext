@@ -70,7 +70,8 @@ def process_latents_from_images(vae, input_file_or_dir, output_dir, args):
         image_files = [
             file
             for file in input.iterdir()
-            if file.suffix in [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".avif"]
+            if file.suffix
+            in [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".avif"]
         ]
     else:
         image_files = [input]
@@ -156,7 +157,9 @@ def decode_vae_and_save(
     vae_file_part = f"-{vae_name}" if vae_name is not None else ""
 
     for i, decoded_image in enumerate(decoded_images):
-        original_file = filenames[i]  # Get the original file name for each image
+        original_file = filenames[
+            i
+        ]  # Get the original file name for each image
         print(original_file)
 
         output_file = (
@@ -205,7 +208,9 @@ def decode_vae_and_save(
             width, height = original_image.size
             # fourcc = cv.VideoWriter_fourcc(*"mp4v")
             fps = 2
-            video = cv.VideoWriter(str(output_mp4_file), -1, fps, (width, height))
+            video = cv.VideoWriter(
+                str(output_mp4_file), -1, fps, (width, height)
+            )
 
             open_cv_image = np.array(original_image)
             open_cv_image = open_cv_image[:, :, ::-1].copy()
@@ -274,7 +279,9 @@ def consistencydecoder_and_save(
         for i, decoded_image in enumerate(sample_consistences):
             original_file_name = filenames[i]
             # Get the original file name for each image
-            original_name_without_extension = os.path.splitext(original_file_name)[0]
+            original_name_without_extension = os.path.splitext(
+                original_file_name
+            )[0]
             save_image(
                 decoded_image,
                 os.path.join(
@@ -314,14 +321,17 @@ def main(args):
         vae = model_util.load_vae(args.vae, torch.float32).to(device)
 
     # Save image decoded latents
-    process_latents_from_images(vae, args.input_file_or_dir, args.output_dir, args)
+    process_latents_from_images(
+        vae, args.input_file_or_dir, args.output_dir, args
+    )
 
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--device", default="cpu")
     argparser.add_argument(
-        "--input_file_or_dir", help="Input file or directory to load the images from"
+        "--input_file_or_dir",
+        help="Input file or directory to load the images from",
     )
     argparser.add_argument(
         "--output_dir", help="Output directory to put the VAE decoded images"
@@ -360,13 +370,18 @@ if __name__ == "__main__":
     )
 
     argparser.add_argument(
-        "--batch_size", type=int, default=1, help="Batch size to process the images."
+        "--batch_size",
+        type=int,
+        default=1,
+        help="Batch size to process the images.",
     )
 
     argparser.add_argument(
         "--sdxl", action="store_true", help="(NOTWORKING) SDXL model"
     )
-    argparser.add_argument("--lowram", type=int, default=1, help="SDXL low ram option")
+    argparser.add_argument(
+        "--lowram", type=int, default=1, help="SDXL low ram option"
+    )
 
     argparser.add_argument(
         "--full_fp16", type=int, default=1, help="SDXL use full fp16"

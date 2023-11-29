@@ -18,7 +18,9 @@ from torchmetrics.multimodal.clip_score import CLIPScore
 
 
 @torch.no_grad()
-def calculate_clip_score(all_prompts_images, accelerator, metric, score_writer):
+def calculate_clip_score(
+    all_prompts_images, accelerator, metric, score_writer
+):
     # batch_size = 5
     clip_scores = []
 
@@ -114,7 +116,9 @@ def main(args):
     set_seed(seed)
 
     device = torch.device(
-        args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+        args.device
+        if args.device
+        else ("cuda" if torch.cuda.is_available() else "cpu")
     )
 
     sd_pipeline = setup_sd_pipeline(args).to(device)
@@ -146,7 +150,13 @@ def main(args):
                         clip_scores.append((clip_score, lora_file))
             else:
                 clip_score = get_clip_score_from_lora(
-                    lora_path, sd_pipeline, accelerator, batch_size, seed, metric, args
+                    lora_path,
+                    sd_pipeline,
+                    accelerator,
+                    batch_size,
+                    seed,
+                    metric,
+                    args,
                 )
                 if clip_score is not None:
                     clip_scores.append((clip_score, lora_path))
@@ -159,13 +169,19 @@ def main(args):
 
     if args.output_clip_score is not None:
         output = Path(args.output_clip_score)
-        csv_filename = output / "clip_scores.csv" if output.is_dir() else output
+        csv_filename = (
+            output / "clip_scores.csv" if output.is_dir() else output
+        )
         with open(csv_filename, "w", newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=["clip_score", "lora_file"])
+            writer = csv.DictWriter(
+                csvfile, fieldnames=["clip_score", "lora_file"]
+            )
             writer.writeheader()
 
             for clip_score, lora_file in clip_scores:
-                writer.writerow(dict(clip_score=clip_score, lora_file=lora_file))
+                writer.writerow(
+                    dict(clip_score=clip_score, lora_file=lora_file)
+                )
 
             print(f"Saved clip scores to {csv_filename.absolute()}")
 
@@ -222,7 +238,9 @@ def get_clip_score_from_lora(
 def generate_latents(sd_pipeline, batch_size, seed):
     prompts = load_dataset("nateraw/parti-prompts", split="train")
     prompts = prompts.shuffle(seed=seed)
-    sample_prompts = [prompts[i]["Prompt"] for i in range(args.num_images_to_score)]
+    sample_prompts = [
+        prompts[i]["Prompt"] for i in range(args.num_images_to_score)
+    ]
 
     print("Prompts")
     for sample_prompt in sample_prompts:
@@ -275,7 +293,9 @@ if __name__ == "__main__":
         help="Save the score from generated images",
     )
 
-    argparser.add_argument("--vae", help="VAE to apply to the generated images")
+    argparser.add_argument(
+        "--vae", help="VAE to apply to the generated images"
+    )
 
     argparser.add_argument(
         "--output_clip_score",
@@ -330,7 +350,9 @@ if __name__ == "__main__":
         action="store_true",
         help="",
     )
-    argparser.add_argument("--xformers", action="store_true", help="Use XFormers")
+    argparser.add_argument(
+        "--xformers", action="store_true", help="Use XFormers"
+    )
     argparser.add_argument("--device", default=None, help="Set device to use")
 
     args = argparser.parse_args()

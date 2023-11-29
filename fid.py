@@ -49,7 +49,10 @@ def generate_fake_images(sd_pipeline, sample_prompts, args):
         ).images
 
         for pi, (image, prompt) in enumerate(
-            zip(images, sample_prompts[i * batch_size : i * batch_size + batch_size])
+            zip(
+                images,
+                sample_prompts[i * batch_size : i * batch_size + batch_size],
+            )
         ):
             cleaned_prompt = prompt.replace(" ", "-")
             filename = f"./tmp/{cleaned_prompt}-{e+i+pi}.png"
@@ -119,9 +122,9 @@ def load_fake_dir(fake_data_dir, args):
     g = torch.Generator()
     g.manual_seed(args.seed)
 
-    fake_ds = load_dataset("imagefolder", data_dir=fake_data_dir, split="train").filter(
-        filter_invalid_images
-    )
+    fake_ds = load_dataset(
+        "imagefolder", data_dir=fake_data_dir, split="train"
+    ).filter(filter_invalid_images)
 
     fake_dataloader = torch.utils.data.DataLoader(
         fake_ds["train"],
@@ -142,7 +145,9 @@ def main(args):
     g.manual_seed(args.seed)
 
     device = torch.device(
-        args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+        args.device
+        if args.device
+        else ("cuda" if torch.cuda.is_available() else "cpu")
     )
 
     metric = FrechetInceptionDistance(feature=args.fid_feature)
@@ -217,7 +222,7 @@ def generate_fake_dataset(sd_pipeline, lora_file, device, seed, num_images, g):
     sd_pipeline.unload_lora_weights()
     try:
         sd_pipeline.load_lora_weights(lora_file, weight_name=lora_file.name)
-    
+
         # AttributeError: 'ModuleList' object has no attribute 'time'
     except AttributeError as e:
         print(e)
@@ -305,7 +310,9 @@ if __name__ == "__main__":
         help="Number of inference steps for creating fake images",
     )
 
-    argparser.add_argument("--xformers", action="store_true", help="Use XFormers")
+    argparser.add_argument(
+        "--xformers", action="store_true", help="Use XFormers"
+    )
     argparser.add_argument("--device", default=None, help="Set device to use")
 
     argparser.add_argument(

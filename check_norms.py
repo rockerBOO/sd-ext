@@ -62,16 +62,18 @@ def get_norms(state_dict, max_norm, device):
                 .unsqueeze(3)
             )
         elif up.shape[2:] == (3, 3) or down.shape[2:] == (3, 3):
-            updown = torch.nn.functional.conv2d(down.permute(1, 0, 2, 3), up).permute(
-                1, 0, 2, 3
-            )
+            updown = torch.nn.functional.conv2d(
+                down.permute(1, 0, 2, 3), up
+            ).permute(1, 0, 2, 3)
         else:
             updown = up @ down
 
         updown *= scale
 
         save_key = downkeys[i].replace(".lora_down", "")
-        longest_key = len(save_key) if len(save_key) > longest_key else longest_key
+        longest_key = (
+            len(save_key) if len(save_key) > longest_key else longest_key
+        )
 
         pre_norms.append({save_key: updown.norm().item()})
 
@@ -142,9 +144,13 @@ def main(args):
     print(args.models)
     for model in get_models(args.models):
         print(f"Model: {model}")
-        pre_norms, post_norms, keys_scaled, longest_key = process(model, device, args)
+        pre_norms, post_norms, keys_scaled, longest_key = process(
+            model, device, args
+        )
 
-        print(f"Tensor norm average:                       {average(pre_norms)}")
+        print(
+            f"Tensor norm average:                       {average(pre_norms)}"
+        )
 
         if args.max_norm is not None:
             print(
@@ -158,7 +164,9 @@ if __name__ == "__main__":
         description="Check the norm values for the weights in a LoRA model"
     )
 
-    argparser.add_argument("models", nargs="+", help="LoRA model to check the norms of")
+    argparser.add_argument(
+        "models", nargs="+", help="LoRA model to check the norms of"
+    )
     argparser.add_argument("--verbose", help="Output each norm value")
     argparser.add_argument(
         "--device", default=None, help="Device to run the calculations on"
