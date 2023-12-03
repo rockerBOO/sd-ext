@@ -114,25 +114,25 @@ if __name__ == "__main__":
         nargs="+",
         help="Extensions for embedding files.",
     )
+    parser.add_argument(
+        "--notes",
+        type=str,
+        help="Notes to add to the bundled file's metadata",
+    )
 
     parser.add_argument("--verbose", default=1, type=int, help="Verbosity level.")
     args = parser.parse_args()
+
+    notes = {"notes": args.notes} if args.notes else {}
 
     lora_paths = [Path(lora_path) for lora_path in args.lora_path]
     embedding_paths = [Path(embedding_path) for embedding_path in args.emb_path]
     lora_files = get_files(lora_paths, args.lora_ext)
     embedding_files = get_files(embedding_paths, args.emb_ext)
-
-    # print(lora_files)
-    # print(embedding_files)
-    # Now we want to make a bundle between each embedding into each lora file
-
     for lora_file in lora_files:
         for embedding_file in embedding_files:
             embedding_dict = load_state_dict(embedding_file)
-            # print([k for k in embedding_dict.keys()])
-            # import sys
-            # sys.exit(2)
+
             bundled = bundle_state_dict([(embedding_file.stem, embedding_dict)])
             outfile = Path(Path(args.dst_dir) / f"bundle-{lora_file.stem}.safetensors")
             save_state_dict(
@@ -142,5 +142,6 @@ if __name__ == "__main__":
                 {
                     "lora_file": str(lora_file.name),
                     "embedding_file": str(embedding_file.name),
+                    **notes,
                 },
             )
