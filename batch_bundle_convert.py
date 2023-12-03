@@ -43,10 +43,8 @@ def bundle_state_dict(state_dicts: List[dict]) -> dict:
 
 def load_state_dict(file: Path) -> dict:
     state_dict = {}
-    print(file)
     with safe_open(file, framework="pt") as f:
         for key in f.keys():
-            print(key)
             state_dict[key] = f.get_tensor(key)
 
     return state_dict
