@@ -36,7 +36,7 @@ def bundle_state_dict(state_dicts: List[dict]) -> dict:
     bundle_dict = {}
     for embed_name, state_dict in state_dicts:
         for _key, value in state_dict.items():
-            bundle_dict[f"bundle_emb.{embed_name}"] = value
+            bundle_dict[f"bundle_emb.{embed_name}.blank_test"] = value
 
     return bundle_dict
 
@@ -47,15 +47,24 @@ def load_state_dict(file: Path) -> dict:
         for key in f.keys():
             state_dict[key] = f.get_tensor(key)
 
-    return state_dict
+        metadata = f.metadata()
+
+    return state_dict, metadata
 
 
-def save_state_dict(lora_file: Path, bundled: dict, outfile: Path, metadata={}):
-    lora_state_dict = {**load_state_dict(lora_file), **bundled}
+def save_state_dict(
+    lora_file: Path, bundled: dict, outfile: Path, metadata={}
+):
+    lora_state_dict, lora_metadata = load_state_dict(lora_file)
+    lora_state_dict = {**lora_state_dict, **bundled}
     save_file(
         lora_state_dict,
         outfile,
-        metadata={"bundled": "Bundled using rockerBOO sd-ext", **metadata},
+        metadata={
+            "bundled": "Bundled using rockerBOO sd-ext",
+            **lora_metadata,
+            **metadata,
+        },
     )
 
 
@@ -90,7 +99,11 @@ if __name__ == "__main__":
         help="Paths to LoRA model files.",
     )
     parser.add_argument(
-        "--emb_path", default=[], type=str, nargs="+", help="Paths to embedding files."
+        "--emb_path",
+        default=[],
+        type=str,
+        nargs="+",
+        help="Paths to embedding files.",
     )
     parser.add_argument(
         "--dst_dir",
@@ -118,21 +131,31 @@ if __name__ == "__main__":
         help="Notes to add to the bundled file's metadata",
     )
 
-    parser.add_argument("--verbose", default=1, type=int, help="Verbosity level.")
+    parser.add_argument(
+        "--verbose", default=1, type=int, help="Verbosity level."
+    )
     args = parser.parse_args()
 
     notes = {"notes": args.notes} if args.notes else {}
 
     lora_paths = [Path(lora_path) for lora_path in args.lora_path]
-    embedding_paths = [Path(embedding_path) for embedding_path in args.emb_path]
+    embedding_paths = [
+        Path(embedding_path) for embedding_path in args.emb_path
+    ]
     lora_files = get_files(lora_paths, args.lora_ext)
     embedding_files = get_files(embedding_paths, args.emb_ext)
     for lora_file in lora_files:
         for embedding_file in embedding_files:
-            embedding_dict = load_state_dict(embedding_file)
+            embedding_dict, embedding_metadata = load_state_dict(
+                embedding_file
+            )
 
-            bundled = bundle_state_dict([(embedding_file.stem, embedding_dict)])
-            outfile = Path(Path(args.dst_dir) / f"bundle-{lora_file.stem}.safetensors")
+            bundled = bundle_state_dict(
+                [(embedding_file.stem, embedding_dict)]
+            )
+            outfile = Path(
+                Path(args.dst_dir) / f"bundle-{lora_file.stem}.safetensors"
+            )
             save_state_dict(
                 lora_file,
                 bundled,
@@ -140,6 +163,7 @@ if __name__ == "__main__":
                 {
                     "lora_file": str(lora_file.name),
                     "embedding_file": str(embedding_file.name),
+                    **embedding_metadata,
                     **notes,
                 },
             )
