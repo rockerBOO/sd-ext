@@ -32,7 +32,9 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="")
+    parser = argparse.ArgumentParser(
+        description="Filter images using the aethestic score"
+    )
     parser.add_argument(
         "scores_file", help="Scores CSV file to filter your results"
     )
@@ -40,18 +42,6 @@ if __name__ == "__main__":
         "--images_dir",
         required=True,
         help="Directory where the images are located for this CSV file for loading the images into the website",
-    )
-    parser.add_argument(
-        "--server",
-        default=False,
-        action="store_true",
-        help="Run a webserver to view filtering in your browser.",
-    )
-    parser.add_argument(
-        "--port",
-        default=3456,
-        type=int,
-        help="Set the port to run the server on.",
     )
     args = parser.parse_args()
     main(args)
