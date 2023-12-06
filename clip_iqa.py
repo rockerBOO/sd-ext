@@ -277,7 +277,10 @@ def main(args):
         else ("cuda" if torch.cuda.is_available() else "cpu")
     )
 
-    metric = CLIPImageQualityAssessment(prompts=get_prompts(args))
+    metric = CLIPImageQualityAssessment(
+        prompts=get_prompts(args),
+        model_name_or_path=args.clip_model_name_or_path,
+        )
     metric.to(device)
 
     if args.data_dir is not None:
