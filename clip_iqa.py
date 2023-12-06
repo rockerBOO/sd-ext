@@ -277,7 +277,10 @@ def main(args):
         else ("cuda" if torch.cuda.is_available() else "cpu")
     )
 
-    metric = CLIPImageQualityAssessment(prompts=get_prompts(args))
+    metric = CLIPImageQualityAssessment(
+        prompts=get_prompts(args),
+        model_name_or_path=args.clip_model_name_or_path,
+        )
     metric.to(device)
 
     if args.data_dir is not None:
@@ -420,8 +423,8 @@ if __name__ == "__main__":
     )
     argparser.add_argument(
         "--clip_model_name_or_path",
-        default="openai/clip-vit-base-patch16",
-        help="CLIP Model to get the CLIP score from",
+        default="clip_iqa",
+        help="CLIP Model to get the CLIP IQA score from",
     )
 
     argparser.add_argument(
