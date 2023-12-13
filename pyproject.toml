@@ -19,6 +19,7 @@ jupyterlab = "^4.0.9"
 ipykernel = "^6.27.1"
 matplotlib = "^3.8.2"
 wandb = "^0.16.1"
+open-clip-torch = "^2.23.0"
 
 [tool.black]
 line-length=79
