@@ -122,7 +122,7 @@ if __name__ == "__main__":
         "--other_file_or_dir", help="Image dataset to compare with."
     )
     argparser.add_argument(
-        "--recursive", help="Recursively go through the directories."
+        "--recursive", action="store_true", help="Recursively go through the directories."
     )
 
     argparser.add_argument(
