@@ -35,7 +35,7 @@ Recommended cloning into another repository to use their dependencies.
 ```bash
 python -m venv venv
 source ./venv/bin/activate # linux
-call .\venv\bin\activate.bat # windows
+call .\venv\Scripts\activate.bat # windows
 
 # PyTorch. Get the version that works for your computer.
 # https://pytorch.org/get-started/locally/
