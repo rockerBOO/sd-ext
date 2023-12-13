@@ -7,6 +7,18 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
+accelerate = "0.23.0"
+transformers = "4.30.2"
+diffusers = {version = "0.21.2", extras = ["torch"]}
+datasets = "2.15.0"
+numpy = "1.26.2"
+safetensors = "0.4.0"
+torchmetrics = {version = "1.2.0", extras = ["multimodal"]}
+torchvision = "0.16.1"
+jupyterlab = "^4.0.9"
+ipykernel = "^6.27.1"
+matplotlib = "^3.8.2"
+wandb = "^0.16.1"
 
 [tool.black]
 line-length=79

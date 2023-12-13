@@ -103,6 +103,8 @@ def setup_sd_pipeline(args):
 
     if args.xformers is None:
         sd_pipeline.unet.set_attn_processor(AttnProcessor2_0())
+
+    print(sd_pipeline.unet)
     # sd_pipeline.unet = torch.compile(
     #     sd_pipeline.unet, mode="reduce-overhead", fullgraph=True
     # )
@@ -128,6 +130,8 @@ def main(args):
     accelerator = Accelerator()
 
     sd_pipeline, metric = accelerator.prepare(sd_pipeline, metric)
+
+    print(sd_pipeline.vae)
 
     batch_size = args.batch_size
     clip_scores = []

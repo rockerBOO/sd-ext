@@ -1,15 +1,128 @@
 import torch
 from torch import nn
+import torchvision
 
 from sd_ext.files import load_file
 
 
-class AestheticPredictor(nn.Module):
-    def __init__(self, input_size, xcol="emb", ycol="avg_rating"):
+class Print(nn.Module):
+    def __init__(self, name=""):
+        super(Print, self).__init__()
+
+        self.name = name
+
+    def forward(self, x):
+        print(self.name, x.shape, x.norm())
+        return x
+
+
+class AestheticPredictorSwish(nn.Module):
+    def __init__(self, input_size, dropout1=0.2, dropout2=0.2, dropout3=0.1):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(input_size, 1024),
+            nn.Dropout(dropout1),
+            nn.GELU(),
+            nn.LayerNorm(1024),
+            Print(),
+            nn.Linear(1024, 512),
+            nn.Dropout(dropout2),
+            nn.SiLU(),
+            nn.LayerNorm(512),
+            Print(),
+            nn.Linear(512, 128),
+            nn.Dropout(dropout2),
+            nn.SiLU(),
+            nn.LayerNorm(128),
+            Print(),
+            nn.Linear(128, 64),
+            nn.Dropout(dropout3),
+            nn.SiLU(),
+            Print(),
+            nn.Linear(64, 16),
+            nn.SiLU(),
+            Print(),
+            # nn.Linear(16, 1),
+            # nn.Sigmoid(),
+            Print(),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class AestheticPredictorTransformer(nn.Module):
+    def __init__(self, input_size):
         super().__init__()
         self.input_size = input_size
-        self.xcol = xcol
-        self.ycol = ycol
+        self.layers = nn.Transformer(nhead=8, num_encoder_layers=6)
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class AestheticPredictorRelu(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+        self.input_size = input_size
+        self.layers = nn.Sequential(
+            nn.Linear(self.input_size, 1024),
+            nn.Dropout(0.2),
+            nn.ReLU(),
+            nn.Linear(1024, 128),
+            nn.Dropout(0.2),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.Dropout(0.1),
+            nn.ReLU(),
+            nn.Linear(64, 16),
+            nn.Linear(16, 1),
+            # nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class LinearDown(nn.Module):
+    def __init__(self, in_channels, out_channels, dropout=0.2):
+        super(LinearDown, self).__init__()
+        print(in_channels, out_channels)
+        self.linear = nn.Linear(in_channels, out_channels)
+        self.dropout = nn.Dropout(0.2)
+        self.act = nn.SiLU()
+
+    def forward(self, x):
+        x = self.dropout(self.linear(x))
+        x = self.act(x)
+
+        return x
+
+
+class AestheticPredictorSE(nn.Module):
+    def __init__(self, in_channels=768, out_channels=1024, adaptive_pool=True):
+        super(AestheticPredictorSE, self).__init__()
+
+        self.in_channels = in_channels
+        self.layers = nn.Sequential(
+            LinearDown(self.in_channels, out_channels),
+            LinearDown(out_channels, int(out_channels / 4)),
+            LinearDown(int(out_channels / 4), int(out_channels / 8)),
+            LinearDown(int(out_channels / 8), int(out_channels / 16)),
+            LinearDown(int(out_channels / 16), int(out_channels / 64)),
+            nn.AdaptiveAvgPool1d(1)
+            if adaptive_pool
+            else nn.Linear(int(out_channels / 64), 1),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class AestheticPredictor(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+        self.input_size = input_size
         self.layers = nn.Sequential(
             nn.Linear(self.input_size, 1024),
             nn.Dropout(0.2),
@@ -26,24 +139,6 @@ class AestheticPredictor(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
-
-    def training_step(self, batch):
-        x = batch[self.xcol]
-        y = batch[self.ycol].reshape(-1, 1)
-        x_hat = self.layers(x)
-        loss = torch.nn.functional.mse_loss(x_hat, y)
-        return loss
-
-    def validation_step(self, batch):
-        x = batch[self.xcol]
-        y = batch[self.ycol].reshape(-1, 1)
-        x_hat = self.layers(x)
-        loss = torch.nn.functional.mse_loss(x_hat, y)
-        return loss
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
 
 
 class AestheticScorer:
@@ -78,3 +173,5 @@ def load_model(model_file: str, clip_model_name: str) -> AestheticPredictor:
     predictor.eval()
 
     return predictor
+
+
