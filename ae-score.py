@@ -7,6 +7,7 @@ from PIL import Image
 from platformdirs import user_cache_dir
 from sd_ext.files import get_files
 from sd_ext.cache import ensure_model
+from sd_ext.format import to_csv, format_args
 from sd_ext.aesthetic import load_model, AestheticScorer
 
 
@@ -73,12 +74,24 @@ def main(args):
     scores = []
     for file in files:
         with Image.open(file) as image:
-            scores.append((file, aesthetic_scorer.score(image)))
+            scores.append(
+                {"file": file, "score": aesthetic_scorer.score(image)}
+            )
 
-    scores = sorted(scores, key=lambda x: x[1], reverse=True)
+    scores = sorted(scores, key=lambda x: x["score"], reverse=True)
 
-    for score in scores:
-        print(score[0], score[1])
+    for i, score in enumerate(scores):
+        for key in score.keys():
+            if key in ["file"]:
+                scores[i][key] = str(score[key])
+
+    if args.verbose:
+        for score in scores:
+            print(score['file'], score['score'])
+
+    if args.csv:
+        to_csv(scores, args.csv)
+        print(f"Saved to: {args.csv}")
 
 
 if __name__ == "__main__":
@@ -103,6 +116,13 @@ if __name__ == "__main__":
         help=f"CLIP model. Options: {', '.join(clip_models)}.",
     )
 
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Output the similarity between the images",
+    )
+
+    parser = format_args(parser)
     args = parser.parse_args()
 
     main(args)

@@ -169,7 +169,9 @@ def load_model(model_file: str, clip_model_name: str) -> AestheticPredictor:
     else:
         predictor = AestheticPredictor(768)
 
-    predictor.load_state_dict(load_file(model_file))
+    state_dict, metadata = load_file(model_file)
+
+    predictor.load_state_dict(state_dict)
     predictor.eval()
 
     return predictor
