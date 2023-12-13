@@ -34,9 +34,9 @@ def main(args):
 
     other_files = files
 
-    if args.other_file_or_dir:
+    if args.other_file_or_dir is not None:
         other_files = get_files(
-            args.image_file_or_dir,
+            args.other_file_or_dir,
             file_ext=args.exts,
             recursive=args.recursive is True,
         )
@@ -46,6 +46,9 @@ def main(args):
         other_files = [
             file for file in files if (args.filter in str(file)) is False
         ]
+
+    print(f"Found files {len(files)}")
+    print(f"Other files {len(other_files)}")
 
     print("Getting image embeddings from CLIP...")
 
@@ -58,17 +61,22 @@ def main(args):
 
         embeddings.append(embedding)
 
+    print(f"Image embeddings: {len(embeddings)}")
+
     print("Getting comparision image embeddings from CLIP...")
 
     other_embeddings = embeddings
 
     if args.other_file_or_dir:
+        other_embeddings = []
         for file in other_files:
             other_embedding = get_image_features(
                 image_processor, clip_model, Image.open(file), device
             )
 
             other_embeddings.append(other_embedding)
+
+    print(f"Other image embeddings: {len(other_embeddings)}")
 
     print("Comparing image embeddings using cosine similarity...")
 
@@ -78,6 +86,7 @@ def main(args):
     for file1, emb1 in zip(files, embeddings):
         for file2, emb2 in zip(other_files, other_embeddings):
             if file1 == file2:
+                print(file1, file2, "skip")
                 continue
 
             similarity = F.cosine_similarity(emb1, emb2)
@@ -90,24 +99,34 @@ def main(args):
                 }
             )
 
-    for similarity in similarities:
-        print(
-            similarity["file1"].name,
-            similarity["file2"].name,
-            f"{similarity['similarity']:4f}",
-        )
+    print(f"Similarities: {len(similarities)}")
 
-    # conver over file names to  strings
+    if args.verbose:
+        for similarity in similarities:
+            print(
+                similarity["file1"].name,
+                similarity["file2"].name,
+                f"{similarity['similarity']:4f}",
+            )
+
+    # convert over file names to  strings
     for i, similarity in enumerate(similarities):
         for key in similarity.keys():
             if key in ["file1", "file2"]:
                 similarities[i][key] = str(similarity[key])
 
+    assert len(similarities) > 0, (
+        "Did not get any similarities. Check the paths to make sure we found "
+        + "the images. Check --exts and --filter too."
+    )
+
     if args.csv:
         to_csv(similarities, args.csv)
+        print(f"Saved to: {args.csv}")
 
     if args.json:
         to_json(similarities, args.json)
+        print(f"Saved to: {args.json}")
 
 
 if __name__ == "__main__":
@@ -122,7 +141,9 @@ if __name__ == "__main__":
         "--other_file_or_dir", help="Image dataset to compare with."
     )
     argparser.add_argument(
-        "--recursive", action="store_true", help="Recursively go through the directories."
+        "--recursive",
+        action="store_true",
+        help="Recursively go through the directories.",
     )
 
     argparser.add_argument(
@@ -137,6 +158,11 @@ if __name__ == "__main__":
         help="Filter to use to exclude images. Checks if the filter is in the filename. Ex: --filter mask",
     )
 
+    argparser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Output the similarity between the images",
+    )
     argparser.add_argument(
         "--clip_model",
         choices=VISION_TRANSFORMER_MODELS,
