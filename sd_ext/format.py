@@ -15,6 +15,7 @@ def from_json(file):
     """
     Load from file
     """
+    print(f"Save JSON to {file}")
     with open(file) as f:
         results = json.load(f)
 
@@ -43,6 +44,7 @@ def to_csv(results, file):
     """
     Save to csv file
     """
+    print(f"Save CSV to {file}")
     with open(file, "w") as f:
         fieldnames = [key for key in results[0].keys()]
         writer = csv.DictWriter(f, fieldnames=fieldnames)

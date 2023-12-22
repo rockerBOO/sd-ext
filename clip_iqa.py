@@ -21,15 +21,16 @@
 
 import argparse
 from collections import defaultdict
+from pathlib import Path
 
 import PIL
 import torch
 from accelerate.utils import set_seed
-from datasets import Dataset
 from torchmetrics.multimodal import CLIPImageQualityAssessment
 from torchvision import transforms
 from sd_ext.sd import generate_dataset, setup_sd_generator, sd_arguments
 from sd_ext.dataset import load_image_dataset_from_dir
+from sd_ext.format import to_csv, to_json, format_args
 
 TRANSFORMS = transforms.Compose(
     [
@@ -84,12 +85,15 @@ def main(args):
     )
 
     metric = CLIPImageQualityAssessment(
-        prompts=get_clip_iqa_prompts(args.prompts)
+        model_name_or_path=args.clip_model_name_or_path,
+        prompts=get_clip_iqa_prompts(args.prompts),
     )
     metric.to(device)
 
+    print(f"Loading {args.data_dir}")
+
     if args.data_dir is not None:
-        ds = load_image_dataset_from_dir(args)
+        ds = load_image_dataset_from_dir(args.data_dir)
     else:
         sd_generator = setup_sd_generator(args)
         ds = generate_dataset(sd_generator)
@@ -106,18 +110,26 @@ def main(args):
 
     scores = get_scores(dataloader, metric, device)
 
-    average_scores = defaultdict()
-    for image_file, score_prompts in scores.items():
-        for prompt, score in score_prompts:
-            average_scores.setdefault(prompt, []).append(score)
+    # average_scores = defaultdict()
+    # for k, (image_file, prompt_scores) in scores.items():
+    #     for prompt, score in prompt_scores:
+    #         average_scores.setdefault(prompt, []).append(score)
 
     print(f"Average CLIP IQA scores for {len(dataloader)} in {args.data_dir}")
-    for prompt, scores in average_scores.items():
-        print(f"{prompt:<20} {sum(scores) / len(scores)}")
+    for score in scores:
+        print(f"{Path(score['image_file']).name} {score['prompt']} {score['score']}")
+        # print(f"{score['prompt']:<20} {sum(scores) / len(scores)}")
+
+    if args.csv:
+        to_csv(scores, args.csv)
+
+    if args.json:
+        to_json(scores, args.json)
 
 
-def get_scores(dataloader, metric, device, score_writer):
-    clip_iqa_scores = defaultdict()
+def get_scores(dataloader, metric, device):
+    # clip_iqa_scores = defaultdict()
+    scores = []
     for i, batch in enumerate(dataloader):
         images = []
         for image in batch:
@@ -125,21 +137,16 @@ def get_scores(dataloader, metric, device, score_writer):
 
         results = metric(torch.stack(images).to(device))
 
-        print(results)
-        clip_iqa_scores.append(results)
-        # for result, image in (results, batch):
-        #     scores = []
-        #     image_file = Path(image["image_file"])
-        #     print(f"{image_file.name}")
-        #     for key, value in result.items():
-        #         scores.append((key, value.detach().item()))
-        #         # print(f"\t{f'{key}:':<10} {value.item():.3%}")
-        #
-        #     clip_iqa_scores.setdefault(image_file.absolute(), []).extend(
-        #         scores
-        #     )
+        for prompt, score in results.items():
+            scores.append(
+                {
+                    "image_file": image["image_file"],
+                    "prompt": prompt,
+                    "score": score.item(),
+                }
+            )
 
-    return clip_iqa_scores
+    return scores
 
 
 if __name__ == "__main__":
@@ -222,14 +229,10 @@ if __name__ == "__main__":
         help="list of prompts separated by comma",
     )
 
-    argparser.add_argument(
-        "--clip_model_name_or_path",
-        default="clip_iqa",
-        help="CLIP Model to get the CLIP IQA score from",
-    )
     argparser.add_argument("--device", default=None, help="Set device to use")
 
     argparser = sd_arguments(argparser)
+    argparser = format_args(argparser)
     args = argparser.parse_args()
 
     main(args)

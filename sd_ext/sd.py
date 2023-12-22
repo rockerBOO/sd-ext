@@ -8,17 +8,20 @@ from pathlib import Path
 import torch
 from datasets import Dataset
 from typing import List
+from .random import set_seed
 
 
 class SDGenerator:
-    def __init__(self, pipeline, seed, batch_size, device):
+    def __init__(self, pipeline, seed, batch_size, device, steps=50):
         self.pipeline = pipeline
         self.seed = seed
         self.batch_size = batch_size
         self.device = device
+        self.steps = steps
 
     def pipe(self, *args, **kwargs):
-        self.pipeline(*args, **kwargs)
+
+        return self.pipeline(*args, num_inference_steps=self.steps, **kwargs)
 
 
 def generate_images(sd_generator: SDGenerator, prompts: List[str]):
@@ -86,8 +89,16 @@ def setup_sd_generator(args):
     # sd_pipeline.unet = torch.compile(
     #     sd_pipeline.unet, mode="reduce-overhead", fullgraph=True
     # )
+    if args.device is None:
+        args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    return SDGenerator(sd_pipeline, args.seed, args.batch_size, args.device)
+    if args.seed is not None:
+        set_seed(args.seed)
+
+
+    sd_pipeline.to(args.device)
+
+    return SDGenerator(sd_pipeline, args.seed, args.batch_size, args.device, steps=args.steps)
 
 
 def generate_dataset(sd_generator, prompts=None):
@@ -123,6 +134,10 @@ def sd_arguments(argparser):
     )
 
     argparser.add_argument(
+        "--steps", default=15, help="Number of steps to do for inference"
+    )
+
+    argparser.add_argument(
         "--sliced_vae",
         action="store_true",
         help="Sliced VAE enables decoding large batches of images with limited"
@@ -149,6 +164,13 @@ def sd_arguments(argparser):
         "--xformers", action="store_true", help="Use XFormers"
     )
 
+    argparser.add_argument(
+        "--seed", type=int, default=1234, help="Seed to use for random number generation"
+    )
+
+    argparser.add_argument(
+        "--device", help="Seed to use for random number generation"
+    )
     argparser.add_argument(
         "--batch_size",
         type=int,

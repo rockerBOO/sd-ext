@@ -9,7 +9,7 @@ from diffusers import AutoencoderKL
 from PIL import Image
 from torchvision import transforms
 
-from sd_ext.aesthetic import get_image_features
+from sd_ext.clip import get_image_features
 from sd_ext.files import get_files, save_model
 from sd_ext.hash import hash_file
 

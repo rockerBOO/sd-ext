@@ -1,4 +1,5 @@
 import torch
+from PIL import Image
 
 # ConvNext-Base
 # ConvNext-Large
@@ -18,8 +19,44 @@ VISION_TRANSFORMER_MODELS = [
 ]
 
 
+def get_image_latents(image_processor, image):
+    """
+    Get the CLIP embeddings of the image
+    """
+    return image_processor(image).unsqueeze(0)
+
+
+@torch.no_grad()
+def get_image_features_from_image(
+    image_processor, clip_model, image: Image, device
+):
+    """
+    Get the CLIP embeddings of the image
+    """
+
+    return get_image_features_from_latents(
+        clip_model, get_image_latents(image_processor).to(device)
+    )
+
+
+@torch.no_grad()
+def get_image_features_from_latents(
+    clip_model, image: torch.Tensor, device
+):
+    """
+    Get the CLIP embeddings of the image as a tensor
+    """
+    image_features = clip_model.encode_image(image)
+    image_features /= image_features.norm(dim=-1, keepdim=True)
+
+    return image_features
+
+
 @torch.no_grad()
 def get_image_features(image_processor, clip_model, image, device):
+    """
+    Get the CLIP embeddings of the image
+    """
     image = image_processor(image).unsqueeze(0).to(device)
     image_features = clip_model.encode_image(image)
     image_features /= image_features.norm(dim=-1, keepdim=True)
