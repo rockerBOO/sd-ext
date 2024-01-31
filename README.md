@@ -1,6 +1,7 @@
 # SD Extensions
 
 <!--toc:start-->
+
 - [SD Extensions](#sd-extensions)
   - [Analysis](#analysis)
   - [Pruning](#pruning)
@@ -11,7 +12,7 @@
   - [Install](#install)
     - [Install using venv virtual environment](#install-using-venv-virtual-environment)
   - [Usage](#usage)
-<!--toc:end-->
+  <!--toc:end-->
 
 Script's I use with Stable Diffusion
 
@@ -64,7 +65,23 @@ call .\venv\Scripts\activate.bat # windows
 
 # PyTorch. Get the version that works for your computer.
 # https://pytorch.org/get-started/locally/
+```
 
+### (Optional) Install dependencies using poetry [recommended]
+
+```bash
+poetry install
+```
+
+Then run with `poetry run`
+
+```bash
+poetry run python read-metadata.py myfile.safetensors
+```
+
+### (Optional) Install dependencies using PIP
+
+```bash
 pip install -r requirements.txt
 ```
 
