@@ -67,7 +67,9 @@ call .\venv\Scripts\activate.bat # windows
 # https://pytorch.org/get-started/locally/
 ```
 
-### (Optional) Install dependencies using poetry [recommended]
+Pick A or B to install dependencies
+
+### A) (Optional) Install dependencies using poetry [recommended]
 
 ```bash
 poetry install
@@ -79,7 +81,7 @@ Then run with `poetry run`
 poetry run python read-metadata.py myfile.safetensors
 ```
 
-### (Optional) Install dependencies using PIP
+### B) (Optional) Install dependencies using PIP
 
 ```bash
 pip install -r requirements.txt
