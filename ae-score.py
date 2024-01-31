@@ -87,7 +87,7 @@ def main(args):
 
     if args.verbose:
         for score in scores:
-            print(score['file'], score['score'])
+            print(score["file"], score["score"])
 
     if args.csv:
         to_csv(scores, args.csv)

@@ -8,11 +8,12 @@ def main(args):
     with safe_open(args.path, "pt") as file:
         metadata = file.metadata()
 
-        for key, value in metadata.items():
-            if value[0] == "{" or value[0] == "[":
-                print(f"{key}:", json.dumps(json.loads(value), indent=4))
-            else:
-                print(f"{key}:", value)
+        if metadata is not None:
+            for key, value in metadata.items():
+                if len(value) > 0 and (value[0] == "{" or value[0] == "["):
+                    print(f"{key}:", json.dumps(json.loads(value), indent=4))
+                else:
+                    print(f"{key}:", value)
 
         # print(json.dumps(parsed, indent=4))
 

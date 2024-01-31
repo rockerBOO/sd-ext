@@ -15,7 +15,7 @@ from PIL import Image
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 VISION_TRANSFORMER_MODELS = [
-    "ViT-B/32" "ViT-B/16" "ViT-L/14" "ViT-H/14" "ViT-L/14" "ViT-G/14"
+    "ViT-B/32", "ViT-B/16", "ViT-L/14", "ViT-H/14", "ViT-G/14"
 ]
 
 

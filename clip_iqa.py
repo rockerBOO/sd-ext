@@ -201,12 +201,15 @@ if __name__ == "__main__":
     )
 
     argparser.add_argument(
-        "--seed", type=int, default=1234, help="Seed for random and torch"
-    )
-    argparser.add_argument(
         "--data_dir",
         required=True,
         help="Data dir",
+    )
+
+    argparser.add_argument(
+        "--clip_model_name_or_path",
+        default="openai/clip-vit-base-patch16",
+        help="CLIP Model to get the CLIP score from",
     )
 
     argparser.add_argument(
@@ -228,8 +231,6 @@ if __name__ == "__main__":
         default="sharpness;brightness;quality;contrast;colorfullness;happy;beutiful",
         help="list of prompts separated by comma",
     )
-
-    argparser.add_argument("--device", default=None, help="Set device to use")
 
     argparser = sd_arguments(argparser)
     argparser = format_args(argparser)

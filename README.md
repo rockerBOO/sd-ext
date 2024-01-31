@@ -1,30 +1,55 @@
 # SD Extensions
 
 <!--toc:start-->
-
 - [SD Extensions](#sd-extensions)
   - [Analysis](#analysis)
   - [Pruning](#pruning)
+  - [Extracting](#extracting)
+  - [Convert](#convert)
+  - [Inference](#inference)
+  - [Metadata](#metadata)
   - [Install](#install)
     - [Install using venv virtual environment](#install-using-venv-virtual-environment)
   - [Usage](#usage)
-  <!--toc:end-->
+<!--toc:end-->
 
 Script's I use with Stable Diffusion
 
 ## Analysis
 
-- clip_iqa.py
-- clip_score.py
-- fid.py
-- check_norms.py
 - debug_vae_from_images.py
-- read-metadata.py
+- clip_score.py
+- clip_arch.py
+- clip_embeddings.py
+- clip_image_embeddings.py
+- clip_iqa.py
+- image_similarity.py
+- check_norms.py
+- fid.py
 
 ## Pruning
 
 - scale_norms.py
 - drop_keys.py
+
+## Extracting
+
+- extract_lora_block.py
+
+## Convert
+
+- convert_safetensors.py
+- batch_bundle_convert.py
+
+## Inference
+
+- sdv.py
+- sdxl-turbo.py
+- wuerstechen.py
+
+## Metadata
+
+- read-metadata.py
 
 ## Install
 

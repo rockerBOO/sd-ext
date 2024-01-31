@@ -23,9 +23,10 @@ def main(args):
 
     # prompt = "Two cats playing chess on a tree branch"
     prompt = args.prompt 
-    image = generator.pipe(prompt, guidance_scale=7.5).images[0].resize((512, 512))
+    images = generator.pipe(prompt, guidance_scale=7.5).images
 
-    image.save("cats_playing_chess.png")
+    for i, image in enumerate(images):
+        image.save(f"{prompt}_{i}.png")
 
 
 if __name__ == "__main__":

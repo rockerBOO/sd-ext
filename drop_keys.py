@@ -98,7 +98,7 @@ if __name__ == "__main__":
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    argparser.add_argument("model", help="LoRA model to check the norms of")
+    argparser.add_argument("model", help="LoRA model drop the keys from")
 
     argparser.add_argument("--output", help="Output file to this file")
 

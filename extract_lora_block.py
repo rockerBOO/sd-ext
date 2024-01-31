@@ -17,4 +17,4 @@ with safe_open(args.model, framework="pt") as f:
         if args.base_name in key:
             tensors[key] = f.get_tensor(key)
 
-    save_file(tensors, f"{args.base_name}.safetensors")
+    save_file(tensors, f"{args.base_name}.safetensors", f.metadata())

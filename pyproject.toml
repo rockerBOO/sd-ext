@@ -20,7 +20,12 @@ matplotlib = "^3.8.2"
 wandb = "^0.16.1"
 open-clip-torch = "^2.23.0"
 fastapi = "^0.105.0"
-diffusers = {git = "https://github.com/huggingface/diffusers"}
+omegaconf = "^2.3.0"
+diffusers = "^0.25.0"
+python-multipart = "^0.0.6"
+
+[tool.poetry.group.dev.dependencies]
+jupyter = "^1.0.0"
 
 [tool.black]
 line-length=79
