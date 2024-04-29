@@ -34,15 +34,21 @@ def main(args):
 
 
 if __name__ == "__main__":
-    argparser = argparse.ArgumentParser()
+    argparser = argparse.ArgumentParser(description="""
+    Generate captions using moondream VQA model.
+
+    Uses fp16 model on CUDA.
+
+    $ python moondream.py /path/to/image.png
+
+    $ python moondream.py /path/to/image.png /path/to/image2.png
+
+    $ python moondream.py /path/to/dir/images
+    """, formatter_class=argparse.RawTextHelpFormatter)
 
     argparser.add_argument(
-        "--images",
-        required=False,
+        "images",
         nargs="+",
-        default=[
-            "/home/rockerboo/art/boo-analog-skin-texture/00001-595494360.png"
-        ],
         help="List of image or image directories",
     )
 
