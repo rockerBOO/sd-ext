@@ -1,5 +1,6 @@
 import argparse
 import json
+import torch
 
 from safetensors import safe_open
 
@@ -21,7 +22,8 @@ def main(args):
             for key in file.keys():
                 if args.read_tensor:
                     t = file.get_tensor(key)
-                    print(key, t.size(), t.norm())
+                    # print(key, t.size(), t.norm())
+                    print(key, t.size(), t.norm() if t.dtype != torch.int64 else t.item())
                 else:
                     print(key)
 
