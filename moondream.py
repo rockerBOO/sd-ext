@@ -5,6 +5,7 @@ import argparse
 from pathlib import Path
 
 
+@torch.inference_mode()
 def main(args):
     model_id = "vikhyatk/moondream2"
     revision = "2024-04-02"

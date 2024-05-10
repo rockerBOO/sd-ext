@@ -47,6 +47,9 @@ Script's I use with Stable Diffusion
 - sdv.py
 - sdxl-turbo.py
 - wuerstechen.py
+- moondream.py
+- segmoe_run.py
+- sd_dpo.py
 
 ## Metadata
 
