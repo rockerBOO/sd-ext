@@ -1,5 +1,6 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from PIL import Image
+import pillow_avif
 import torch
 import argparse
 from pathlib import Path
@@ -29,21 +30,23 @@ def main(args):
     image_paths = [
         image_path
         for image_path in image_paths
-        if image_path.suffix in [".jpg", ".png"]
+        if image_path.suffix
+        in [".jpg", ".jpeg", ".webp", ".avif", ".bmp", ".png"]
     ]
 
     images = [(image, Image.open(image)) for image in image_paths]
 
     prompts = [
-        "Describe this image with simplified language. Consider the pose and composition of the image.  Consider the camera, perspective, lighting of the image. Describe it like a caption to the image."
-    ] * len(images)
+        f"Ignore color. Consider if this image is close up or other perspective. Consider the image name {image_name.stem}. Describe woman as a simplified caption while image, consider composition, lighting, image quality, perspective. Be consise."
+        for (image_name, _) in images
+    ]
 
     batchsize = 2
 
     for i in range(0, len(images), batchsize):
         answers = model.batch_answer(
             [image for _, image in images[i : i + batchsize]],
-            prompts,
+            [prompt for prompt in prompts[i : i + batchsize]],
             tokenizer,
         )
 
@@ -53,6 +56,11 @@ def main(args):
                 for answer, image in zip(answers, images[i : i + batchsize])
             ]
         )
+
+        if args.output:
+            for answer, image in zip(answers, images[i : i + batchsize]):
+                with open(image[0].with_suffix(".txt"), "w") as f:
+                    f.write(answer)
 
 
 if __name__ == "__main__":
@@ -80,6 +88,7 @@ if __name__ == "__main__":
         nargs="+",
         help="List of image or image directories",
     )
+    argparser.add_argument("--output", default=False)
 
     args = argparser.parse_args()
     main(args)
