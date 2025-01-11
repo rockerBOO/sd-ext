@@ -1,4 +1,5 @@
 import argparse
+import ast
 from pathlib import Path
 
 import torch
@@ -40,7 +41,8 @@ def save_to_file(file_name, state_dict, metadata):
         print("Error: Pickle checkpoints not yet supported for saving")
 
 
-def apply_max_norm(state_dict, max_norm_value, device):
+# scaling max norm code credit from https://github.com/kohya-ss/sd-scripts
+def apply_max_norm(state_dict, max_norm, device, scale_map={}):
     downkeys = []
     upkeys = []
     alphakeys = []
@@ -54,6 +56,11 @@ def apply_max_norm(state_dict, max_norm_value, device):
             alphakeys.append(key.replace("lora_down.weight", "alpha"))
 
     for i in range(len(downkeys)):
+        max_norm_value = max_norm
+        for key in scale_map.keys():
+            if key in downkeys[i]:
+                max_norm_value = scale_map[key]
+
         down = state_dict[downkeys[i]].to(device)
         up = state_dict[upkeys[i]].to(device)
         alpha = state_dict[alphakeys[i]].to(device)
@@ -90,6 +97,17 @@ def apply_max_norm(state_dict, max_norm_value, device):
     return keys_scaled, sum(norms) / len(norms), max(norms), state_dict
 
 
+def parse_dict(input_str):
+    """Convert string input into a dictionary."""
+    try:
+        # Use ast.literal_eval to safely evaluate the string as a Python literal (dict)
+        return ast.literal_eval(input_str)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"Invalid dictionary format: {input_str}"
+        )
+
+
 def main(args):
     if args.output is not None:
         output = args.output
@@ -110,9 +128,7 @@ def main(args):
     max_norm = args.max_norm
 
     keys_scaled, normed, max_norm, scaled_lora_state_dict = apply_max_norm(
-        lora_sd,
-        max_norm,
-        device,
+        lora_sd, max_norm, device, scale_map=args.scale_map
     )
 
     print(f"Keys scaled: {keys_scaled}")
@@ -135,6 +151,14 @@ if __name__ == "__main__":
         required=True,
         help="Max normalization to apply to the tensors",
     )
+
+    argparser.add_argument(
+        "--scale_map",
+        type=parse_dict,
+        default="{}",
+        help="scale map",
+    )
+
     argparser.add_argument(
         "--overwrite",
         action="store_true",
