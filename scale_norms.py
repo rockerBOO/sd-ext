@@ -1,5 +1,5 @@
 import argparse
-import ast  
+import ast
 from pathlib import Path
 
 import torch
@@ -41,6 +41,7 @@ def save_to_file(file_name, state_dict, metadata):
         print("Error: Pickle checkpoints not yet supported for saving")
 
 
+# scaling max norm code credit from https://github.com/kohya-ss/sd-scripts
 def apply_max_norm(state_dict, max_norm, device, scale_map={}):
     downkeys = []
     upkeys = []
@@ -102,7 +103,9 @@ def parse_dict(input_str):
         # Use ast.literal_eval to safely evaluate the string as a Python literal (dict)
         return ast.literal_eval(input_str)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"Invalid dictionary format: {input_str}")
+        raise argparse.ArgumentTypeError(
+            f"Invalid dictionary format: {input_str}"
+        )
 
 
 def main(args):
@@ -125,10 +128,7 @@ def main(args):
     max_norm = args.max_norm
 
     keys_scaled, normed, max_norm, scaled_lora_state_dict = apply_max_norm(
-        lora_sd,
-        max_norm,
-        device,
-        scale_map=args.scale_map
+        lora_sd, max_norm, device, scale_map=args.scale_map
     )
 
     print(f"Keys scaled: {keys_scaled}")
@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     argparser.add_argument(
         "--scale_map",
-        type=parse_dict, 
+        type=parse_dict,
         default="{}",
         help="scale map",
     )
