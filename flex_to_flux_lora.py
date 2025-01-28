@@ -1,7 +1,7 @@
 import argparse
 import re
 
-import safetensors
+from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
 
@@ -29,6 +29,9 @@ def convert_module_ids(
     # Load the Safetensors file
     weights = load_file(safetensors_file)
 
+    with safe_open(safetensors_file, framework="pt") as f:
+        metadata = f.metadata()
+
     # Create a mapping of input block IDs to output block IDs
     block_mapping = {
         i: output_start_block + (i - input_start_block)
@@ -55,7 +58,7 @@ def convert_module_ids(
 
     print(f"Saving to {output_file}")
     # Save the modified weights to a new Safetensors file
-    save_file(weights, output_file)
+    save_file(weights, output_file, metadata=metadata)
 
 
 def main(args):
