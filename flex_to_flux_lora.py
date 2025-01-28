@@ -80,7 +80,14 @@ if __name__ == "__main__":
     # output_start_block = 16
     # convert_module_ids(safetensors_file, input_start_block, input_end_block, output_start_block)
     parser = argparse.ArgumentParser(
-        description="Convert module IDs in a Safetensors file"
+        description="""
+            This script converts the module IDs of a Safetensors file from one block to another block.
+            It takes an input Safetensors file, input start and end block numbers, output start block number, 
+            and an output Safetensors file path as arguments.
+
+            python flex_to_flux_lora.py --input_file landscape.safetensors --output_file landscape-flex_to_flux.safetensors
+        """,
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
         "-f",
