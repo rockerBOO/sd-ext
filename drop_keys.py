@@ -64,7 +64,13 @@ def main(args):
 
     lora_sd, metadata = load_state_dict(args.model)
 
-    keys = args.keys
+    keys = args.keys or []
+
+    if args.keys_file is not None:
+        with open(args.keys_file) as f:
+            keys.extend([x.strip() for x in f.readlines()])
+
+    print(keys)
 
     cleaned_lora_sd, dropped = drop_keys(lora_sd, keys)
 
@@ -103,6 +109,7 @@ if __name__ == "__main__":
     argparser.add_argument("--output", help="Output file to this file")
 
     argparser.add_argument("--keys", nargs="+", help="Keys to drop")
+    argparser.add_argument("--keys_file", help="File of keys to drop, new line separated")
 
     argparser.add_argument(
         "--overwrite",
