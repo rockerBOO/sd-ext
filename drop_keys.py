@@ -1,122 +1,97 @@
 import argparse
 from pathlib import Path
-
 import torch
-from safetensors.torch import load_file, safe_open, save_file
-
-try:
-    from library import model_util
-except ModuleNotFoundError:
-    print(
-        "Requires to be with the Kohya-ss sd-scripts"
-        + "https://github.com/kohya-ss/sd-scripts"
-    )
-    print("Copy this script into your Kohya-ss sd-scripts directory")
-    import sys
-
-    sys.exit(2)
+import re
+from safetensors.torch import save_file
+from safetensors import safe_open
 
 
-def load_state_dict(file_name, dtype=None):
-    if model_util.is_safetensors(file_name):
-        sd = load_file(file_name)
-        with safe_open(file_name, framework="pt") as f:
-            metadata = f.metadata()
-    else:
-        sd = torch.load(file_name, map_location="cpu")
-        metadata = None
-
-    # for key in list(sd.keys()):
-    #     if type(sd[key]) == torch.Tensor:
-    #         sd[key] = sd[key].to(dtype)
-
-    return sd, metadata
-
-
-def save_to_file(file_name, state_dict, metadata):
-    if Path(file_name).suffix == ".safetensors":
-        save_file(state_dict, file_name, metadata=metadata)
-    else:
-        print("Error: Pickle checkpoints not yet supported for saving")
-
-
-def drop_keys(state_dict, keys):
-    dropped = []
-    dict_keys = [key for key in state_dict.keys()]
-    for key in dict_keys:
-        for k in keys:
-            if k in key:
-                # drop key
-                dropped.append(key)
-                del state_dict[key]
-
-    return state_dict, dropped
+def should_drop_key(key, patterns):
+    """Check if a key should be dropped based on exact match, partial match, or regex."""
+    for pattern in patterns:
+        # Try exact match first
+        if key == pattern:
+            return True, f"exact match: {pattern}"
+        
+        # Try partial match (substring)
+        if pattern in key:
+            return True, f"partial match: {pattern}"
+        
+        # Try regex match (if pattern looks like regex or has special chars)
+        try:
+            if re.search(pattern, key):
+                return True, f"regex match: {pattern}"
+        except re.error:
+            # Not a valid regex, skip regex matching for this pattern
+            pass
+    
+    return False, None
 
 
-def main(args):
-    if args.output is not None:
-        output = args.output
-    else:
-        if args.overwrite is True:
-            output = args.model
-        else:
-            raise RuntimeError("Invalid model to save to")
+def drop_keys_from_safetensors(input_file, patterns_to_drop, output_file):
+    """Drop specified keys from a safetensors file and save to output."""
+    
+    # Track dropped keys
+    dropped_keys = []
+    new_state_dict = {}
+    
+    # Open the safetensors file and iterate through keys
+    with safe_open(input_file, framework="pt") as f:
+        metadata = f.metadata()
+        # Get all keys from the file
+        all_keys = list(f.keys())
+        
+        # Filter out keys to drop and load remaining tensors
+        for key in all_keys:
+            should, reason = should_drop_key(key, patterns_to_drop)
+            if should:
+                print(reason)
+                dropped_keys.append(key)
+                print(f"Dropped: {key}")
+            else:
+                # Load the tensor for this key
+                tensor = f.get_tensor(key)
+                new_state_dict[key] = tensor
+    
+    print(f"Total dropped keys: {len(dropped_keys)}")
+    print(f"Remaining keys: {len(new_state_dict)}")
 
-    lora_sd, metadata = load_state_dict(args.model)
+    # print("Metadata")
+    # print(metadata)
+    
+    # Save the new state dict
+    save_file(new_state_dict, output_file, metadata=metadata)
+    print(f"Saved cleaned model to: {output_file}")
+    
+    return dropped_keys
 
-    keys = args.keys or []
 
-    if args.keys_file is not None:
-        with open(args.keys_file) as f:
-            keys.extend([x.strip() for x in f.readlines()])
-
-    print(keys)
-
-    cleaned_lora_sd, dropped = drop_keys(lora_sd, keys)
-
-    for dropped_key in dropped:
-        print(f"Dropped: {dropped_key}")
-
-    print(f"Dropped keys: {len(dropped)}")
-
-    save_to_file(output, cleaned_lora_sd, metadata)
+def main():
+    parser = argparse.ArgumentParser(description="Drop keys from a safetensors file using exact match, partial match, or regex")
+    parser.add_argument("input", type=str, help="Input safetensors file")
+    parser.add_argument("output", type=str, help="Output safetensors file")
+    parser.add_argument("--patterns", nargs="+", default=[], help="Patterns to match for dropping (exact, partial, or regex)")
+    parser.add_argument("--patterns-file", type=str, help="File containing patterns to drop (one per line)")
+    
+    args = parser.parse_args()
+    
+    # Collect patterns to drop
+    patterns_to_drop = list(args.patterns)
+    
+    if args.patterns_file:
+        with open(args.patterns_file, 'r') as f:
+            file_patterns = [line.strip() for line in f if line.strip()]
+            patterns_to_drop.extend(file_patterns)
+    
+    if not patterns_to_drop:
+        print("No patterns specified to drop. Use --patterns or --patterns-file")
+        return
+    
+    print(f"Patterns to match: {patterns_to_drop}")
+    
+    # Drop keys and save
+    drop_keys_from_safetensors(args.input, patterns_to_drop, args.output)
 
 
 if __name__ == "__main__":
-    argparser = argparse.ArgumentParser(
-        description="""
-        Drop keys from the model using a string match.
-
-        python drop_keys.py /my/lora/file.safetensors --output /my/lora/file-dropped-to_v.safetensors --keys to_v ff_net
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_v.alpha
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_v.lora_down.weight
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn1_to_v.lora_up.weight
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_v.alpha
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_v.lora_down.weight
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_attn2_to_v.lora_up.weight
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_0_proj.alpha
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_0_proj.lora_down.weight
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_0_proj.lora_up.weight
-        Dropped: lora_unet_down_blocks_0_attentions_0_transformer_blocks_0_ff_net_2.alpha
-        ...
-        Dropped keys: 192
-        """,
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-
-    argparser.add_argument("model", help="LoRA model drop the keys from")
-
-    argparser.add_argument("--output", help="Output file to this file")
-
-    argparser.add_argument("--keys", nargs="+", help="Keys to drop")
-    argparser.add_argument("--keys_file", help="File of keys to drop, new line separated")
-
-    argparser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="WARNING overwrites original file. "
-        + "Overwrite the model with dropped keys version",
-    )
-
-    args = argparser.parse_args()
-    main(args)
+    main()
