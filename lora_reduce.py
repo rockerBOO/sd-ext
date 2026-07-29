@@ -639,7 +639,7 @@ def main():
             "Run only these experiments (default: all). Names: "
             "global, selective, norm-global, norm-selective, spectral, svd, "
             "svd-norm-selective, norm-selective-global, spec-ratio, spec-ratio-svd, orth, "
-            "layer-prune, energy, block-prune, "
+            "layer-prune, energy, effective_rank, block-prune, "
             "pruned-norm-selective, energy-norm-selective, pruned-energy, max-norm"
         ),
     )
@@ -937,6 +937,27 @@ def main():
         rank_reductions = [(b, o, n) for b, (o, n) in rank_changes.items() if o != n]
         rank_reductions.sort(key=lambda x: x[1] - x[2], reverse=True)
         print(f"  Energy pruning (min_energy={energy_thresh}): {len(changed)}/{len(rank_changes)} layers had rank reduced")
+        for name, orig_r, new_r in rank_reductions[:8]:
+            short = name.replace("lora_unet_", "")
+            print(f"    {short}: rank {orig_r} → {new_r}")
+        if len(rank_reductions) > 8:
+            print(f"    ... ({len(rank_reductions) - 8} more)")
+        print()
+
+    # --- Experiment: Effective-rank pruning ---
+    if want("effective_rank"):
+        reduced, rank_changes = apply_effective_rank_pruning(tensors, modules, device=device)
+        out_path = output_dir / f"{stem}-effrank.safetensors"
+        changed = {b: (o, n) for b, (o, n) in rank_changes.items() if o != n}
+        extra_meta = {
+            "lora_reduce.source": input_path.name,
+            "lora_reduce.method": "effective_rank_pruning",
+            "lora_reduce.layers_affected": str(len(changed)),
+        }
+        save_variant(reduced, out_path, "effective-rank pruning", metadata, extra_meta)
+        rank_reductions = [(b, o, n) for b, (o, n) in rank_changes.items() if o != n]
+        rank_reductions.sort(key=lambda x: x[1] - x[2], reverse=True)
+        print(f"  Effective-rank pruning: {len(changed)}/{len(rank_changes)} layers had rank reduced")
         for name, orig_r, new_r in rank_reductions[:8]:
             short = name.replace("lora_unet_", "")
             print(f"    {short}: rank {orig_r} → {new_r}")
