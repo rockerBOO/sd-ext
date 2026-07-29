@@ -29,7 +29,14 @@ def parse_module_name(module_name: str) -> tuple[str, int, str]:
 
 
 def group_modules(tensors: dict) -> dict:
-    """Group tensors by base module name, returning up/down/alpha per module."""
+    """Group tensors by base module name, returning up/down/alpha per module.
+
+    Recognizes both sd-scripts keys (.lora_up.weight/.lora_down.weight/.alpha)
+    and PEFT keys (.lora_B.weight/.lora_A.weight). PEFT's A is the down-projection
+    and B is the up-projection, matching sd-scripts' down/up roles. PEFT files
+    typically carry no per-layer alpha tensor; callers already treat a missing
+    alpha_key as scale = 1.0 (see compute_effective_scales and friends).
+    """
     modules = {}
     for key in tensors:
         if ".lora_up.weight" in key:
@@ -37,6 +44,12 @@ def group_modules(tensors: dict) -> dict:
             modules.setdefault(base, {})["up_key"] = key
         elif ".lora_down.weight" in key:
             base = key.replace(".lora_down.weight", "")
+            modules.setdefault(base, {})["down_key"] = key
+        elif ".lora_B.weight" in key:
+            base = key.replace(".lora_B.weight", "")
+            modules.setdefault(base, {})["up_key"] = key
+        elif ".lora_A.weight" in key:
+            base = key.replace(".lora_A.weight", "")
             modules.setdefault(base, {})["down_key"] = key
         elif ".alpha" in key:
             base = key.replace(".alpha", "")
