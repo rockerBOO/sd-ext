@@ -664,16 +664,21 @@ def main():
     modules = group_modules(tensors)
     eff_scales = compute_effective_scales(tensors, modules, device=device)
 
-    all_scales = np.array(list(eff_scales.values()))
-    median = float(np.median(all_scales))
-    print(f"  Layers: {len(eff_scales)}  Median effective scale: {median:.2f}  Max: {np.max(all_scales):.2f}")
+    if not eff_scales:
+        print("  Layers: 0 (no lora_up/lora_down or lora_A/lora_B pairs found — unsupported format, e.g. LoKr)")
+        median = 0.0
+        outliers = {}
+    else:
+        all_scales = np.array(list(eff_scales.values()))
+        median = float(np.median(all_scales))
+        print(f"  Layers: {len(eff_scales)}  Median effective scale: {median:.2f}  Max: {np.max(all_scales):.2f}")
 
-    # Identify outliers
-    outliers = {base: s for base, s in eff_scales.items() if s > median * args.threshold}
-    print(f"  Outliers (>{args.threshold}x median): {len(outliers)}")
-    for base, s in sorted(outliers.items(), key=lambda x: -x[1]):
-        _, _, _ = parse_module_name(base)
-        print(f"    {base}  eff={s:.2f}  ({s/median:.2f}x)")
+        # Identify outliers
+        outliers = {base: s for base, s in eff_scales.items() if s > median * args.threshold}
+        print(f"  Outliers (>{args.threshold}x median): {len(outliers)}")
+        for base, s in sorted(outliers.items(), key=lambda x: -x[1]):
+            _, _, _ = parse_module_name(base)
+            print(f"    {base}  eff={s:.2f}  ({s/median:.2f}x)")
 
     print()
 
