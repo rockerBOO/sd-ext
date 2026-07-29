@@ -199,7 +199,7 @@ def test_apply_lokr_effective_rank_skips_ineligible_modules():
     }
     modules = group_modules_lokr(tensors)
 
-    reduced, rank_changes = apply_lokr_effective_rank(tensors, modules, device="cpu")
+    _reduced, rank_changes = apply_lokr_effective_rank(tensors, modules, device="cpu")
 
     assert "y" not in rank_changes
     assert "z" not in rank_changes
