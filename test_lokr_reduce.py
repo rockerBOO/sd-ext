@@ -202,3 +202,48 @@ def test_apply_lokr_effective_rank_skips_ineligible_modules():
 
     assert "y" not in rank_changes
     assert "z" not in rank_changes
+
+
+def test_alpha_rewrite_preserves_effective_kron_output():
+    """Reproduces ComfyUI's LoKr scale computation to verify the alpha-rewrite rule.
+
+    Original (full w1, full w2): ComfyUI applies kron(w1, w2) * 1.0 (alpha ignored,
+    see comfy/weight_adapter/lokr.py calculate_weight: dim stays None when both w1
+    and w2 are full, so alpha falls back to 1.0).
+
+    Reduced (full w1, decomposed w2_a/w2_b): ComfyUI applies
+    kron(w1, w2_a @ w2_b) * (alpha / w2_b.shape[0]).
+
+    With alpha rewritten to r = w2_b.shape[0], the multiplier becomes exactly 1.0,
+    so the reduced effective output should match a direct truncated-SVD
+    reconstruction of the original w2 (not the original w2 itself, which is what the
+    truncation error comes from).
+    """
+    w1 = torch.eye(4)
+    w2 = _make_lokr_w2(16, 12, [10.0, 8.0, 6.0, 4.0, 2.0, 1.0, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01], seed=7)
+    tensors = {"x.lokr_w1": w1, "x.lokr_w2": w2}
+    modules = group_modules_lokr(tensors)
+
+    reduced, rank_changes = apply_lokr_svd(tensors, modules, keep_ratio=0.5, device="cpu")
+    _, r = rank_changes["x"]
+
+    # Original effective delta, as ComfyUI computes it today (alpha ignored, scale 1.0).
+    original_effective = torch.kron(w1, w2) * 1.0
+
+    # Reduced effective delta, as ComfyUI would compute it after decomposition:
+    # kron(w1, w2_a @ w2_b) * (alpha / r).
+    w2_a = reduced["x.lokr_w2_a"]
+    w2_b = reduced["x.lokr_w2_b"]
+    alpha = reduced["x.alpha"].item()
+    reduced_effective = torch.kron(w1, w2_a @ w2_b) * (alpha / r)
+
+    # Best possible rank-r reconstruction of the original w2 (the truncation error floor).
+    U, S, Vh = torch.linalg.svd(w2, full_matrices=False)
+    best_rank_r_w2 = U[:, :r] @ torch.diag(S[:r]) @ Vh[:r, :]
+    best_rank_r_effective = torch.kron(w1, best_rank_r_w2) * 1.0
+
+    assert torch.allclose(reduced_effective, best_rank_r_effective, atol=1e-3)
+    # Sanity check the rewrite actually matters: using the untouched original alpha
+    # (a huge sentinel) instead of r would NOT match.
+    bogus_effective = torch.kron(w1, w2_a @ w2_b) * (9.9992e9 / r)
+    assert not torch.allclose(bogus_effective, best_rank_r_effective, atol=1e-3)
