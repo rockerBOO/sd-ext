@@ -325,6 +325,71 @@ def apply_energy_pruning(
     return out, rank_changes
 
 
+def apply_effective_rank_pruning(
+    tensors: dict, modules: dict, device: str = "cpu"
+) -> tuple[dict, dict[str, tuple[int, int]]]:
+    """Per-layer rank reduction to each layer's entropy-based effective rank.
+
+    For each layer, computes effective_rank = exp(entropy(s²/Σs²)) from the singular
+    values of up @ down (via the core-trick SVD) and truncates to
+    round(effective_rank), clamped to [1, original_rank]. Unlike apply_energy_pruning,
+    this has no tunable threshold — entropy directly measures how many dimensions the
+    layer's spectrum actually uses.
+
+    NOTE (LoRA+): same caveat as SVD truncation — rebalances factorization.
+    Returns (new_tensors, {base: (orig_rank, new_rank)}).
+    """
+    out = dict(tensors)
+    rank_changes: dict[str, tuple[int, int]] = {}
+
+    for base, data in modules.items():
+        if "up_key" not in data or "down_key" not in data:
+            continue
+        up_key, down_key = data["up_key"], data["down_key"]
+        up = tensors[up_key].to(dtype=torch.float32)
+        down = tensors[down_key].to(dtype=torch.float32)
+        orig_up_shape = up.shape
+        rank = down.shape[0]
+
+        U_up, U_c, S_c, Vh_c, Vh_dn = _low_rank_svd(up, down, device=device)
+
+        s2 = S_c.cpu().float().numpy() ** 2
+        total = s2.sum()
+        if total <= 0:
+            continue
+
+        p = s2 / total
+        nonzero = p > 0
+        entropy = float(-np.sum(p[nonzero] * np.log(p[nonzero])))
+        effective_rank = float(np.exp(entropy))
+        k = int(min(rank, max(1, round(effective_rank))))
+
+        rank_changes[base] = (rank, k)
+
+        if k >= rank:
+            continue  # nothing to prune
+
+        sqrt_S = torch.sqrt(S_c[:k])
+        new_up = (U_up @ U_c[:, :k]) * sqrt_S
+        new_down = sqrt_S.unsqueeze(1) * (Vh_c[:k, :] @ Vh_dn)
+
+        if len(orig_up_shape) > 2:
+            extra = orig_up_shape[2:]
+            new_up = new_up.view(new_up.shape[0], k, *extra)
+            new_down = new_down.view(k, down.shape[1], *extra)
+
+        out[up_key] = new_up.to(dtype=tensors[up_key].dtype)
+        out[down_key] = new_down.to(dtype=tensors[down_key].dtype)
+
+        if "alpha_key" in data:
+            old_alpha = tensors[data["alpha_key"]].item()
+            out[data["alpha_key"]] = torch.tensor(
+                old_alpha * (k / rank), dtype=tensors[data["alpha_key"]].dtype
+            )
+
+    return out, rank_changes
+
+
 def apply_spectral_norm_scale(tensors: dict, modules: dict, target: float | None = None, device: str = "cpu") -> tuple[dict, float, dict[str, float]]:
     """Scale weights so the spectral norm (largest singular value of up@down) matches target.
 
