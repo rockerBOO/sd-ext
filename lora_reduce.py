@@ -374,9 +374,10 @@ def apply_effective_rank_pruning(
         new_down = sqrt_S.unsqueeze(1) * (Vh_c[:k, :] @ Vh_dn)
 
         if len(orig_up_shape) > 2:
-            extra = orig_up_shape[2:]
-            new_up = new_up.view(new_up.shape[0], k, *extra)
-            new_down = new_down.view(k, down.shape[1], *extra)
+            up_extra = orig_up_shape[2:]
+            down_extra = down.shape[2:]
+            new_up = new_up.view(new_up.shape[0], k, *([1] * len(up_extra)))
+            new_down = new_down.view(k, down.shape[1], *down_extra)
 
         out[up_key] = new_up.to(dtype=tensors[up_key].dtype)
         out[down_key] = new_down.to(dtype=tensors[down_key].dtype)
@@ -666,19 +667,19 @@ def main():
 
     if not eff_scales:
         print("  Layers: 0 (no lora_up/lora_down or lora_A/lora_B pairs found — unsupported format, e.g. LoKr)")
-        median = 0.0
-        outliers = {}
-    else:
-        all_scales = np.array(list(eff_scales.values()))
-        median = float(np.median(all_scales))
-        print(f"  Layers: {len(eff_scales)}  Median effective scale: {median:.2f}  Max: {np.max(all_scales):.2f}")
+        print("  Skipping: no recognized LoRA layers to process.")
+        return
 
-        # Identify outliers
-        outliers = {base: s for base, s in eff_scales.items() if s > median * args.threshold}
-        print(f"  Outliers (>{args.threshold}x median): {len(outliers)}")
-        for base, s in sorted(outliers.items(), key=lambda x: -x[1]):
-            _, _, _ = parse_module_name(base)
-            print(f"    {base}  eff={s:.2f}  ({s/median:.2f}x)")
+    all_scales = np.array(list(eff_scales.values()))
+    median = float(np.median(all_scales))
+    print(f"  Layers: {len(eff_scales)}  Median effective scale: {median:.2f}  Max: {np.max(all_scales):.2f}")
+
+    # Identify outliers
+    outliers = {base: s for base, s in eff_scales.items() if s > median * args.threshold}
+    print(f"  Outliers (>{args.threshold}x median): {len(outliers)}")
+    for base, s in sorted(outliers.items(), key=lambda x: -x[1]):
+        _, _, _ = parse_module_name(base)
+        print(f"    {base}  eff={s:.2f}  ({s/median:.2f}x)")
 
     print()
 

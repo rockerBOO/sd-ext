@@ -88,6 +88,12 @@ Applies `sqrt(factor)` symmetrically to both up and down matrices. Preserves LoR
 
 Each experiment produces a file named `{stem}-{experiment}.safetensors` in the output directory, with metadata keys recording the method, parameters, and resulting effective scale statistics.
 
+## PEFT Format Support
+
+In addition to sd-scripts format (`lora_up`/`lora_down`/`alpha`), this tool also accepts PEFT-format LoRA files (`lora_A`/`lora_B` keys).
+
+PEFT adapters store their rank/alpha config in a separate `adapter_config.json` file, not in the safetensors file itself. If you rank-reduce a PEFT adapter with any of this script's rank-reduction experiments (`svd`, `energy`, `effective_rank`), the output tensors' rank will no longer match the `r` value in `adapter_config.json`, and the adapter will fail to load correctly until you manually update that config file to match the new rank.
+
 ## Choosing a Method
 
 **For inference only**: pruning variants are fine. `block-prune double-txt` removes the highest-magnitude layer family entirely with minimal file size.

@@ -1,4 +1,6 @@
-from lora_reduce import group_modules
+import torch
+
+from lora_reduce import apply_effective_rank_pruning, group_modules
 
 
 def test_group_modules_sd_scripts_format():
@@ -38,11 +40,6 @@ def test_group_modules_peft_format_no_alpha_key_present():
     }
     modules = group_modules(tensors)
     assert "alpha_key" not in modules["base_model.model.x"]
-
-
-import torch
-
-from lora_reduce import apply_effective_rank_pruning, group_modules
 
 
 def _orthogonal(n: int, seed: int) -> torch.Tensor:
@@ -136,3 +133,29 @@ def test_effective_rank_handles_conv2d_shape():
     _, new_rank = rank_changes["x"]
     assert reduced["x.lora_up.weight"].shape == (rank, new_rank, 1, 1)
     assert reduced["x.lora_down.weight"].shape == (new_rank, rank, 1, 1)
+
+
+def test_effective_rank_handles_conv2d_shape_with_nontrivial_kernel():
+    """Conv2d LoRA where up has a 1x1 kernel but down has a 3x3 kernel
+    (the realistic conv-LoRA shape: up is (out, rank, 1, 1), down is
+    (rank, in, 3, 3)). Regression test: the reshape must derive the down
+    tensor's kernel dims from `down`'s own shape, not from up's shape
+    (whose kernel dims are always 1x1), or it corrupts/crashes.
+    """
+    rank = 9
+    up, down = _make_layer([10.0] + [0.01] * (rank - 1), seed_offset=40)
+    # up: (out=9, rank=9) -> (9, 9, 1, 1)
+    up_conv = up.view(rank, rank, 1, 1)
+    # down: (rank=9, 9) -> (9, in=1, 3, 3)  (9 = in * 3 * 3 = 1 * 9)
+    down_conv = down.view(rank, 1, 3, 3)
+    tensors = {
+        "x.lora_up.weight": up_conv,
+        "x.lora_down.weight": down_conv,
+    }
+    modules = group_modules(tensors)
+
+    reduced, rank_changes = apply_effective_rank_pruning(tensors, modules, device="cpu")
+
+    _, new_rank = rank_changes["x"]
+    assert reduced["x.lora_up.weight"].shape == (rank, new_rank, 1, 1)
+    assert reduced["x.lora_down.weight"].shape == (new_rank, 1, 3, 3)
