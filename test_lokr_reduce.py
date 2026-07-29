@@ -1,6 +1,6 @@
 import torch
 
-from lokr_reduce import _svd_w2, apply_lokr_svd, group_modules_lokr
+from lokr_reduce import _svd_w2, apply_lokr_effective_rank, apply_lokr_svd, group_modules_lokr
 
 
 def test_group_modules_lokr_full_format():
@@ -150,3 +150,55 @@ def test_apply_lokr_svd_no_reduction_when_ratio_is_one():
 
     assert "x" not in rank_changes
     assert torch.equal(reduced["x.lokr_w2"], tensors["x.lokr_w2"])
+
+
+def test_apply_lokr_effective_rank_collapses_dominant_spectrum():
+    w2 = _make_lokr_w2(16, 12, [10.0] + [0.01] * 11, seed=5)
+    tensors = {
+        "x.lokr_w1": torch.eye(4),
+        "x.lokr_w2": w2,
+    }
+    modules = group_modules_lokr(tensors)
+
+    reduced, rank_changes = apply_lokr_effective_rank(tensors, modules, device="cpu")
+
+    orig_min_dim, new_rank = rank_changes["x"]
+    assert orig_min_dim == 12
+    assert new_rank == 1
+    assert reduced["x.lokr_w2_a"].shape == (16, 1)
+    assert reduced["x.lokr_w2_b"].shape == (1, 12)
+    assert reduced["x.alpha"].item() == 1.0
+
+
+def test_apply_lokr_effective_rank_leaves_uniform_spectrum_unchanged():
+    w2 = _make_lokr_w2(16, 12, [1.0] * 12, seed=6)
+    tensors = {
+        "x.lokr_w1": torch.eye(4),
+        "x.lokr_w2": w2,
+    }
+    modules = group_modules_lokr(tensors)
+
+    reduced, rank_changes = apply_lokr_effective_rank(tensors, modules, device="cpu")
+
+    orig_min_dim, new_rank = rank_changes["x"]
+    assert orig_min_dim == 12
+    assert new_rank == 12
+    # no reduction possible: tensors pass through unchanged
+    assert torch.equal(reduced["x.lokr_w2"], tensors["x.lokr_w2"])
+    assert "x.lokr_w2_a" not in reduced
+
+
+def test_apply_lokr_effective_rank_skips_ineligible_modules():
+    tensors = {
+        "y.lokr_w1": torch.eye(4),
+        "y.lokr_w2_a": torch.randn(16, 4),
+        "y.lokr_w2_b": torch.randn(4, 12),
+        "z.lokr_w1": torch.eye(4),
+        "z.lokr_w2": torch.randn(16, 12, 3, 3),
+    }
+    modules = group_modules_lokr(tensors)
+
+    reduced, rank_changes = apply_lokr_effective_rank(tensors, modules, device="cpu")
+
+    assert "y" not in rank_changes
+    assert "z" not in rank_changes

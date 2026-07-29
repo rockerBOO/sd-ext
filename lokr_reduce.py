@@ -93,3 +93,60 @@ def apply_lokr_svd(
         rank_changes[base] = (min_dim, r)
 
     return out, rank_changes
+
+
+def apply_lokr_effective_rank(
+    tensors: dict, modules: dict, device: str = "cpu"
+) -> tuple[dict, dict[str, tuple[int, int]]]:
+    """Truncate each module's full lokr_w2 to its entropy-based effective rank.
+
+    Same decomposition and alpha-rewrite behavior as apply_lokr_svd, but the target
+    rank r = round(exp(entropy(s²/Σs²))) is computed per-module from lokr_w2's own
+    singular value spectrum instead of a fixed ratio — no threshold to tune.
+
+    Returns (new_tensors, {base: (orig_min_dim, new_rank)}) for eligible modules only.
+    """
+    out = dict(tensors)
+    rank_changes: dict[str, tuple[int, int]] = {}
+
+    for base, data in modules.items():
+        if "w1_key" not in data or "w2_key" not in data:
+            continue
+        w2_key = data["w2_key"]
+        w2 = tensors[w2_key]
+        if w2.dim() != 2:
+            continue
+
+        out_dim, in_dim = w2.shape
+        min_dim = min(out_dim, in_dim)
+
+        U, S, Vh = _svd_w2(w2, device=device)
+
+        s2 = S.cpu().float().numpy() ** 2
+        total = s2.sum()
+        if total <= 0:
+            continue
+
+        p = s2 / total
+        nonzero = p > 0
+        entropy = float(-np.sum(p[nonzero] * np.log(p[nonzero])))
+        effective_rank = float(np.exp(entropy))
+        r = int(min(min_dim, max(1, round(effective_rank))))
+
+        rank_changes[base] = (min_dim, r)
+
+        if r >= min_dim:
+            continue
+
+        sqrt_S = torch.sqrt(S[:r])
+        w2_a = (U[:, :r] * sqrt_S).to(dtype=w2.dtype)
+        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).to(dtype=w2.dtype)
+
+        del out[w2_key]
+        out[f"{base}.lokr_w2_a"] = w2_a
+        out[f"{base}.lokr_w2_b"] = w2_b
+
+        alpha_dtype = tensors[data["alpha_key"]].dtype if "alpha_key" in data else torch.float32
+        out[f"{base}.alpha"] = torch.tensor(float(r), dtype=alpha_dtype)
+
+    return out, rank_changes
