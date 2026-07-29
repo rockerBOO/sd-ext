@@ -80,8 +80,8 @@ def apply_lokr_svd(
         U, S, Vh = _svd_w2(w2, device=device)
 
         sqrt_S = torch.sqrt(S[:r])
-        w2_a = (U[:, :r] * sqrt_S).to(dtype=w2.dtype)
-        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).to(dtype=w2.dtype)
+        w2_a = (U[:, :r] * sqrt_S).contiguous().to(dtype=w2.dtype)
+        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).contiguous().to(dtype=w2.dtype)
 
         del out[w2_key]
         out[f"{base}.lokr_w2_a"] = w2_a
@@ -139,8 +139,8 @@ def apply_lokr_effective_rank(
             continue
 
         sqrt_S = torch.sqrt(S[:r])
-        w2_a = (U[:, :r] * sqrt_S).to(dtype=w2.dtype)
-        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).to(dtype=w2.dtype)
+        w2_a = (U[:, :r] * sqrt_S).contiguous().to(dtype=w2.dtype)
+        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).contiguous().to(dtype=w2.dtype)
 
         del out[w2_key]
         out[f"{base}.lokr_w2_a"] = w2_a
