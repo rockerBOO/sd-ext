@@ -80,15 +80,14 @@ def apply_lokr_svd(
         U, S, Vh = _svd_w2(w2, device=device)
 
         sqrt_S = torch.sqrt(S[:r])
-        w2_a = (U[:, :r] * sqrt_S).contiguous().to(dtype=w2.dtype)
-        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).contiguous().to(dtype=w2.dtype)
+        w2_a = (U[:, :r] * sqrt_S).contiguous().cpu().to(dtype=w2.dtype)
+        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).contiguous().cpu().to(dtype=w2.dtype)
 
         del out[w2_key]
         out[f"{base}.lokr_w2_a"] = w2_a
         out[f"{base}.lokr_w2_b"] = w2_b
 
-        alpha_dtype = tensors[data["alpha_key"]].dtype if "alpha_key" in data else torch.float32
-        out[f"{base}.alpha"] = torch.tensor(float(r), dtype=alpha_dtype)
+        out[f"{base}.alpha"] = torch.tensor(float(r), dtype=torch.float32)
 
         rank_changes[base] = (min_dim, r)
 
@@ -139,15 +138,14 @@ def apply_lokr_effective_rank(
             continue
 
         sqrt_S = torch.sqrt(S[:r])
-        w2_a = (U[:, :r] * sqrt_S).contiguous().to(dtype=w2.dtype)
-        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).contiguous().to(dtype=w2.dtype)
+        w2_a = (U[:, :r] * sqrt_S).contiguous().cpu().to(dtype=w2.dtype)
+        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).contiguous().cpu().to(dtype=w2.dtype)
 
         del out[w2_key]
         out[f"{base}.lokr_w2_a"] = w2_a
         out[f"{base}.lokr_w2_b"] = w2_b
 
-        alpha_dtype = tensors[data["alpha_key"]].dtype if "alpha_key" in data else torch.float32
-        out[f"{base}.alpha"] = torch.tensor(float(r), dtype=alpha_dtype)
+        out[f"{base}.alpha"] = torch.tensor(float(r), dtype=torch.float32)
 
     return out, rank_changes
 
@@ -163,7 +161,10 @@ def _print_rank_summary(label: str, rank_changes: dict[str, tuple[int, int]], mo
     eligible = len(rank_changes)
     total_modules = len(modules)
     skipped = total_modules - eligible
-    print(f"  {label}: {len(changed)}/{eligible} eligible modules reduced ({skipped} skipped: not full/2D)")
+    print(
+        f"  {label}: {len(changed)}/{eligible} eligible modules reduced "
+        f"({skipped} not reduced: ineligible or no rank headroom)"
+    )
 
     savings = []
     for base, (orig_min_dim, new_rank) in changed.items():
@@ -184,6 +185,7 @@ def main():
         "--experiments",
         nargs="*",
         metavar="NAME",
+        choices=["svd", "effective_rank"],
         default=None,
         help="Run only these experiments (default: all). Names: svd, effective_rank",
     )
@@ -226,6 +228,7 @@ def main():
         }
         save_variant(reduced, out_path, "lokr SVD truncation", metadata, extra_meta)
         _print_rank_summary(f"LoKr SVD truncation (keep_ratio={args.svd_keep_ratio})", rank_changes, modules)
+        del reduced
 
     if want("effective_rank"):
         reduced, rank_changes = apply_lokr_effective_rank(tensors, modules, device=device)
@@ -237,6 +240,7 @@ def main():
         }
         save_variant(reduced, out_path, "lokr effective-rank truncation", metadata, extra_meta)
         _print_rank_summary("LoKr effective-rank truncation", rank_changes, modules)
+        del reduced
 
     print("Done.")
 

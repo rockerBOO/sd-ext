@@ -1,4 +1,5 @@
 import torch
+from safetensors.torch import save_file
 
 from lokr_reduce import _svd_w2, apply_lokr_effective_rank, apply_lokr_svd, group_modules_lokr
 
@@ -247,3 +248,30 @@ def test_alpha_rewrite_preserves_effective_kron_output():
     # (a huge sentinel) instead of r would NOT match.
     bogus_effective = torch.kron(w1, w2_a @ w2_b) * (9.9992e9 / r)
     assert not torch.allclose(bogus_effective, best_rank_r_effective, atol=1e-3)
+
+    # The SVD truncation should actually reduce reconstruction error relative to doing
+    # nothing: the reduced output should land closer to the best rank-r reconstruction
+    # than the untouched original does.
+    error_to_best = torch.norm(reduced_effective - best_rank_r_effective)
+    error_original_to_best = torch.norm(original_effective - best_rank_r_effective)
+    assert error_to_best < error_original_to_best
+
+
+def test_apply_lokr_svd_and_effective_rank_outputs_are_save_file_compatible(tmp_path):
+    """Regression test for the .contiguous() fix: reduced tensors must be safetensors-savable.
+
+    save_file rejects non-contiguous tensors, but no prior test exercised the actual
+    save path, so a regression here (e.g. dropping .contiguous()) would go unnoticed.
+    """
+    w2 = _make_lokr_w2(16, 12, [10.0, 8.0, 6.0, 4.0, 2.0, 1.0, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01], seed=8)
+    tensors = {
+        "x.lokr_w1": torch.eye(4),
+        "x.lokr_w2": w2,
+    }
+    modules = group_modules_lokr(tensors)
+
+    svd_reduced, _ = apply_lokr_svd(tensors, modules, keep_ratio=0.5, device="cpu")
+    save_file(svd_reduced, tmp_path / "svd.safetensors")
+
+    effrank_reduced, _ = apply_lokr_effective_rank(tensors, modules, device="cpu")
+    save_file(effrank_reduced, tmp_path / "effrank.safetensors")
