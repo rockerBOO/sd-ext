@@ -150,3 +150,96 @@ def apply_lokr_effective_rank(
         out[f"{base}.alpha"] = torch.tensor(float(r), dtype=alpha_dtype)
 
     return out, rank_changes
+
+
+def get_device(force_cpu: bool = False) -> str:
+    if force_cpu:
+        return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _print_rank_summary(label: str, rank_changes: dict[str, tuple[int, int]], modules: dict):
+    changed = {b: rc for b, rc in rank_changes.items() if rc[0] != rc[1]}
+    eligible = len(rank_changes)
+    total_modules = len(modules)
+    skipped = total_modules - eligible
+    print(f"  {label}: {len(changed)}/{eligible} eligible modules reduced ({skipped} skipped: not full/2D)")
+
+    savings = []
+    for base, (orig_min_dim, new_rank) in changed.items():
+        savings.append((base, orig_min_dim, new_rank))
+    savings.sort(key=lambda x: x[1] - x[2], reverse=True)
+    for base, orig_min_dim, new_rank in savings[:8]:
+        print(f"    {base}: rank {orig_min_dim} -> {new_rank}")
+    if len(savings) > 8:
+        print(f"    ... ({len(savings) - 8} more)")
+    print()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="LoKr rank reduction: SVD-truncate full lokr_w2 tensors")
+    parser.add_argument("input", help="Input safetensors LoKr file")
+    parser.add_argument("output_dir", help="Directory to write output variants")
+    parser.add_argument(
+        "--experiments",
+        nargs="*",
+        metavar="NAME",
+        default=None,
+        help="Run only these experiments (default: all). Names: svd, effective_rank",
+    )
+    parser.add_argument(
+        "--svd-keep-ratio",
+        type=float,
+        default=0.5,
+        help="SVD truncation: fraction of rank to keep (default: 0.5)",
+    )
+    parser.add_argument("--cpu", action="store_true", help="Force CPU processing")
+    args = parser.parse_args()
+
+    _exps = set(args.experiments) if args.experiments is not None else None
+
+    def want(name: str) -> bool:
+        return _exps is None or name in _exps
+
+    device = get_device(force_cpu=args.cpu)
+    print(f"Device: {device}")
+
+    input_path = Path(args.input)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stem = input_path.stem
+
+    print(f"Loading: {input_path}")
+    tensors, metadata = load_with_metadata(input_path)
+    print(f"  Metadata keys: {list(metadata.keys())}")
+    modules = group_modules_lokr(tensors)
+    print(f"  Modules found: {len(modules)}")
+
+    if want("svd"):
+        reduced, rank_changes = apply_lokr_svd(tensors, modules, keep_ratio=args.svd_keep_ratio, device=device)
+        out_path = output_dir / f"{stem}-svd.safetensors"
+        extra_meta = {
+            "lokr_reduce.source": input_path.name,
+            "lokr_reduce.method": "lokr_svd",
+            "lokr_reduce.keep_ratio": str(args.svd_keep_ratio),
+            "lokr_reduce.modules_reduced": str(len({b for b, rc in rank_changes.items() if rc[0] != rc[1]})),
+        }
+        save_variant(reduced, out_path, "lokr SVD truncation", metadata, extra_meta)
+        _print_rank_summary(f"LoKr SVD truncation (keep_ratio={args.svd_keep_ratio})", rank_changes, modules)
+
+    if want("effective_rank"):
+        reduced, rank_changes = apply_lokr_effective_rank(tensors, modules, device=device)
+        out_path = output_dir / f"{stem}-effrank.safetensors"
+        extra_meta = {
+            "lokr_reduce.source": input_path.name,
+            "lokr_reduce.method": "lokr_effective_rank",
+            "lokr_reduce.modules_reduced": str(len({b for b, rc in rank_changes.items() if rc[0] != rc[1]})),
+        }
+        save_variant(reduced, out_path, "lokr effective-rank truncation", metadata, extra_meta)
+        _print_rank_summary("LoKr effective-rank truncation", rank_changes, modules)
+
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()
