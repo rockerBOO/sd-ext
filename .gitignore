@@ -9,3 +9,5 @@ __pycache__
 venv/
 
 .ipynb_checkpoints/
+
+docs/superpowers/
