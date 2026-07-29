@@ -42,3 +42,54 @@ def _svd_w2(w2: torch.Tensor, device: str = "cpu") -> tuple[torch.Tensor, torch.
     """SVD of a full lokr_w2 matrix. Returns (U, S, Vh) such that w2 ≈ U @ diag(S) @ Vh."""
     w2_f32 = w2.to(device, dtype=torch.float32)
     return torch.linalg.svd(w2_f32, full_matrices=False)
+
+
+def apply_lokr_svd(
+    tensors: dict, modules: dict, keep_ratio: float = 0.5, device: str = "cpu"
+) -> tuple[dict, dict[str, tuple[int, int]]]:
+    """Truncate each module's full lokr_w2 to keep_ratio of its rank via SVD.
+
+    Decomposes lokr_w2 (out x in) into lokr_w2_a (out x r) and lokr_w2_b (r x in),
+    removing the lokr_w2 key. Sets the module's alpha to float(r): once lokr_w2 is
+    decomposed, ComfyUI's LoKr loader computes alpha_effective = stored_alpha / r, so
+    alpha must equal r to reproduce today's effective scale of 1.0 (ComfyUI ignores
+    alpha entirely while lokr_w2 is stored full). Only 2D lokr_w2 tensors on modules
+    with both w1_key and w2_key present are eligible; everything else passes through
+    unchanged and is omitted from rank_changes.
+
+    Returns (new_tensors, {base: (orig_min_dim, new_rank)}) for eligible modules only.
+    """
+    out = dict(tensors)
+    rank_changes: dict[str, tuple[int, int]] = {}
+
+    for base, data in modules.items():
+        if "w1_key" not in data or "w2_key" not in data:
+            continue
+        w2_key = data["w2_key"]
+        w2 = tensors[w2_key]
+        if w2.dim() != 2:
+            continue
+
+        out_dim, in_dim = w2.shape
+        min_dim = min(out_dim, in_dim)
+        r = max(1, round(min_dim * keep_ratio))
+
+        if r >= min_dim:
+            continue
+
+        U, S, Vh = _svd_w2(w2, device=device)
+
+        sqrt_S = torch.sqrt(S[:r])
+        w2_a = (U[:, :r] * sqrt_S).to(dtype=w2.dtype)
+        w2_b = (sqrt_S.unsqueeze(1) * Vh[:r, :]).to(dtype=w2.dtype)
+
+        del out[w2_key]
+        out[f"{base}.lokr_w2_a"] = w2_a
+        out[f"{base}.lokr_w2_b"] = w2_b
+
+        alpha_dtype = tensors[data["alpha_key"]].dtype if "alpha_key" in data else torch.float32
+        out[f"{base}.alpha"] = torch.tensor(float(r), dtype=alpha_dtype)
+
+        rank_changes[base] = (min_dim, r)
+
+    return out, rank_changes
